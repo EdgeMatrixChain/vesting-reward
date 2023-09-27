@@ -130,7 +130,7 @@ describe("VestingContract", function () {
       ).to.be.revertedWith("!auth");
     });
 
-    it("Should operate the contract by the owner", async function () {
+    it("Should operate the contract by the operator", async function () {
       const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
         deployContractFixture
       );
@@ -147,6 +147,15 @@ describe("VestingContract", function () {
       expect(weekRewardPerGwei).to.equal(0);
       expect(monthRewardPerGwei).to.equal(0);
       expect(quarterRewardPerGwei).to.equal(0);
+
+      await vesting.setOperator(otherAccount.address)
+      await vesting.connect(otherAccount).setOperator(otherAccount.address)
+      await vesting.connect(otherAccount).setDurationUnitRewards(ONE_GWEI, ONE_GWEI, ONE_GWEI, ONE_GWEI);
+      [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
+      expect(dayRewardPerGwei).to.equal(ONE_GWEI);
+      expect(weekRewardPerGwei).to.equal(ONE_GWEI);
+      expect(monthRewardPerGwei).to.equal(ONE_GWEI);
+      expect(quarterRewardPerGwei).to.equal(ONE_GWEI);
 
     });
   });
