@@ -116,7 +116,7 @@ contract RewardVestingContract {
      * @param monthRewardPerGwei The token to be vested by DurationUnits.Months
      * @param quarterRewardPerGwei The token to be vested by DurationUnits.Quarters
      */
-    function setDelegate(uint256 dayRewardPerGwei,
+    function setDurationUnitRewards(uint256 dayRewardPerGwei,
         uint256 weekRewardPerGwei,
         uint256 monthRewardPerGwei,
         uint256 quarterRewardPerGwei) external{
