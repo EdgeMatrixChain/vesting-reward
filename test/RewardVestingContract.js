@@ -18,7 +18,7 @@ describe("VestingContract", function () {
   // We define a fixture to reuse the same setup in every test.
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Network to that snapshot in every test.
-  async function deployOneYearLockFixture() {
+  async function deployContractFixture() {
 
     const unlockTime = (await time.latest()) + ONE_DAY_IN_SECS * 300;
 
@@ -48,7 +48,7 @@ describe("VestingContract", function () {
   describe("Events", function () {
     it("Should emit an event on release", async function () {
       const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-        deployOneYearLockFixture
+        deployContractFixture
       );
 
       const startTime = await time.latest() + 60;
@@ -112,7 +112,7 @@ describe("VestingContract", function () {
   describe("Operate", function () {
     it("Calling setDurationUnitRewards should revert if caller is not the operator", async () => {
       const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-        deployOneYearLockFixture
+        deployContractFixture
       );
       
     await expect(
@@ -122,7 +122,7 @@ describe("VestingContract", function () {
 
     it("Calling setOperator should revert if caller is not the operator", async () => {
       const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-        deployOneYearLockFixture
+        deployContractFixture
       );
       
     await expect(
@@ -132,7 +132,7 @@ describe("VestingContract", function () {
 
     it("Should operate the contract by the owner", async function () {
       const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-        deployOneYearLockFixture
+        deployContractFixture
       );
 
       [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
@@ -155,7 +155,7 @@ describe("VestingContract", function () {
   describe("CreateVestingSchedule and Release to staker", function () {
     it("Should release the funds to the staker", async function () {
       const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-        deployOneYearLockFixture
+        deployContractFixture
       );
 
       const startTime = await time.latest() + 60;
