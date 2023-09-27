@@ -60,14 +60,16 @@ contract RewardVestingContract {
      * @param beneficiary The address of the beneficiary
      * @param start The start UNIX timestamp of the vesting period
      * @param duration The duration of the vesting period in DurationUnits
-     * @param durationUnits The units of the duration(0 = days, 1 = weeks, 2 = months)
+     * @param durationUnits The units of the duration(0 = days, 1 = weeks, 2 = months, 3 = quarters)
+     * @param rewardPerGwei Rreward per Gwei token
      */
     event VestingScheduleCreated(
         address indexed beneficiary,
         uint256 start,
         uint256 duration,
         DurationUnits durationUnits,
-        uint256 amountTotal
+        uint256 amountTotal,
+        uint256 rewardPerGwei
     );
 
     /**
@@ -108,7 +110,7 @@ contract RewardVestingContract {
         require(msg.sender == operator, "!auth");
         operator = _op;
     }
-        
+
     /**
      * @notice Set reward of schedule durationUnits
      * @param dayRewardPerGwei The rward to be vested by DurationUnits.Days
@@ -116,16 +118,34 @@ contract RewardVestingContract {
      * @param monthRewardPerGwei The token to be vested by DurationUnits.Months
      * @param quarterRewardPerGwei The token to be vested by DurationUnits.Quarters
      */
-    function setDurationUnitRewards(uint256 dayRewardPerGwei,
+    function setDurationUnitRewards(
+        uint256 dayRewardPerGwei,
         uint256 weekRewardPerGwei,
         uint256 monthRewardPerGwei,
-        uint256 quarterRewardPerGwei) external{
+        uint256 quarterRewardPerGwei
+    ) external {
         require(msg.sender == operator, "!auth");
 
         durationUnitRewards[DurationUnits.Days] = dayRewardPerGwei;
         durationUnitRewards[DurationUnits.Weeks] = weekRewardPerGwei;
         durationUnitRewards[DurationUnits.Months] = monthRewardPerGwei;
         durationUnitRewards[DurationUnits.Quarters] = quarterRewardPerGwei;
+    }
+
+    /**
+     * @notice Returns reward of schedule durationUnits
+     */
+    function getDurationUnitRewards()
+        external
+        view
+        returns (uint256, uint256, uint256, uint256)
+    {
+        return (
+            durationUnitRewards[DurationUnits.Days],
+            durationUnitRewards[DurationUnits.Days],
+            durationUnitRewards[DurationUnits.Days],
+            durationUnitRewards[DurationUnits.Days]
+        );
     }
 
     /**
@@ -159,6 +179,7 @@ contract RewardVestingContract {
         token.safeTransferFrom(msg.sender, address(this), _amountTotal);
 
         // create the vesting schedule and add it to the list of schedules for the beneficiary
+        uint256 rewardPerGwei = _reward(_durationUnits);
         vestingSchedules[_beneficiary].push(
             VestingSchedule({
                 beneficiary: _beneficiary,
@@ -167,7 +188,7 @@ contract RewardVestingContract {
                 durationUnits: _durationUnits,
                 amountTotal: _amountTotal,
                 released: 0,
-                rewardPerGwei: _reward(_durationUnits),
+                rewardPerGwei: rewardPerGwei,
                 rewarded: 0
             })
         );
@@ -177,7 +198,8 @@ contract RewardVestingContract {
             _start,
             _duration,
             _durationUnits,
-            _amountTotal
+            _amountTotal,
+            rewardPerGwei
         );
     }
 
@@ -347,12 +369,9 @@ contract RewardVestingContract {
         return reward;
     }
 
-    /**
-     *
-     */
-    function getLockedAmount(
+    function _lockedAmount(
         address _beneficiary
-    ) external view returns (uint256) {
+    ) private view returns (uint256) {
         VestingSchedule[] memory schedules = vestingSchedules[_beneficiary];
         if (schedules.length == 0) return 0;
 
@@ -362,5 +381,23 @@ contract RewardVestingContract {
             lockedAmount += schedule.amountTotal - schedule.released;
         }
         return lockedAmount;
+    }
+
+    /**
+     * @notice Returns the locked amount of tokens for a beneficiary
+     * @param _beneficiary The address of the beneficiary
+     */
+    function getLockedAmount(
+        address _beneficiary
+    ) external view returns (uint256) {
+        return _lockedAmount(_beneficiary);
+    }
+
+    /**
+     * @notice Provided to other governance contract calls
+     * @dev See {IERC20-balanceOf}.
+     */
+    function balanceOf(address account) external view returns (uint256) {
+        return _lockedAmount(account);
     }
 }

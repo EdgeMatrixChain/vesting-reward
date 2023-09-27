@@ -45,267 +45,259 @@ describe("VestingContract", function () {
     return { token, vesting, owner, otherAccount, unlockTime, scheduleRewards };
   }
 
+  describe("Events", function () {
+    it("Should emit an event on release", async function () {
+      const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
+        deployOneYearLockFixture
+      );
 
-  describe("Release", function () {
-    // describe("Validations", function () {
-    //   it("Should revert with the right error if called too soon", async function () {
-    //     const { lock } = await loadFixture(deployOneYearLockFixture);
+      const startTime = await time.latest() + 60;
 
-    //     await expect(lock.withdraw()).to.be.revertedWith(
-    //       "You can't withdraw yet"
-    //     );
-    //   });
+      // duration for deposit 
+      const duration = 4;
+      // durationUnit for deposit 
+      const durUnit = durationUnit.Weeks;
+      // deposit amount
+      const amount = ethers.parseEther("100");
+      // set unlocktime (days)
+      const releaseDays1 = 1 * 7;
 
-    //   it("Should revert with the right error if called from another account", async function () {
-    //     const { lock, unlockTime, otherAccount } = await loadFixture(
-    //       deployOneYearLockFixture
-    //     );
+      DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
+      if (durUnit == durationUnit.Days) {
+      } else if (durUnit == durationUnit.Weeks) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 7;
+      } else if (durUnit == durationUnit.Months) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
+      } else if (durUnit == durationUnit.Quarters) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
+      }
+      const rewardPerGwei = scheduleRewards[durationUnitName[durUnit]];
 
-    //     // We can increase the time in Hardhat Network
-    //     await time.increaseTo(unlockTime);
+      // Testing for depoit
+      // await token.approve(vesting, amount)
+      // await vesting.createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount)
 
-    //     // We use lock.connect() to send a transaction from another account
-    //     await expect(lock.connect(otherAccount).withdraw()).to.be.revertedWith(
-    //       "You aren't the owner"
-    //     );
-    //   });
+      userTokenBalanceBefore = await token.balanceOf(owner);
+      await token.approve(vesting, amount)
 
-    //   it("Shouldn't fail if the unlockTime has arrived and the owner calls it", async function () {
-    //     const { lock, unlockTime } = await loadFixture(
-    //       deployOneYearLockFixture
-    //     );
-
-    //     // Transactions are sent using the first signer by default
-    //     await time.increaseTo(unlockTime);
-
-    //     await expect(lock.withdraw()).not.to.be.reverted;
-    //   });
-    // });
-
-    describe("Events", function () {
-      it("Should emit an event on release", async function () {
-        const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-          deployOneYearLockFixture
-        );
-
-        const startTime = await time.latest() + 60;
-
-        // duration for deposit 
-        const duration = 4;
-        // durationUnit for deposit 
-        const durUnit = durationUnit.Weeks;
-        // deposit amount
-        const amount = ethers.parseEther("100");
-        // set unlocktime (days)
-        const releaseDays1 = 1 * 7;
-
-        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
-        if (durUnit == durationUnit.Days) {
-        } else if (durUnit == durationUnit.Weeks) {
-          DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 7;
-        } else if (durUnit == durationUnit.Months) {
-          DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
-        } else if (durUnit == durationUnit.Quarters) {
-          DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
-        }
-
-        // Testing for depoit
-        // await token.approve(vesting, amount)
-        // await vesting.createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount)
-
-        userTokenBalanceBefore = await token.balanceOf(owner);
-        await token.approve(vesting, amount)
-
-        await expect(vesting.createVestingSchedule(owner.address, startTime, duration, durUnit, amount))
-          .to.emit(vesting, "VestingScheduleCreated")
-          .withArgs(owner.address,
-            startTime,
-            duration,
-            durUnit,
-            amount);
-
-        rewardPerGwei = scheduleRewards[durationUnitName[durUnit]];
-        console.log("vestingTimeStart:\t%o", new Date(startTime * 1000));
-        console.log("duration:\t\t%d", duration);
-        console.log("durationUnit:\t\t%s", durationUnitName[durUnit]);
-        console.log("rewardPerGwei:\t\t%s Gwei\n", ethers.formatUnits(rewardPerGwei, "gwei"));
+      await expect(vesting.createVestingSchedule(owner.address, startTime, duration, durUnit, amount))
+        .to.emit(vesting, "VestingScheduleCreated")
+        .withArgs(owner.address,
+          startTime,
+          duration,
+          durUnit,
+          amount,
+          rewardPerGwei);
 
 
-        vestingTokenBalance = await token.balanceOf(vesting);
-        console.log("vestingTokenBalance:\t%d Ether\n", ethers.formatEther(vestingTokenBalance));
-        expect(vestingTokenBalance).to.equal(amount);
+      // Testing for 1st release
+      timeTo1 = startTime + releaseDays1 * ONE_DAY_IN_SECS;
+      await time.increaseTo(timeTo1);
 
-        // Testing for 1st release
-        timeTo1 = startTime + releaseDays1 * ONE_DAY_IN_SECS;
-        await time.increaseTo(timeTo1);
-        console.log("1st release time:\t%o", new Date((timeTo1) * 1000));
+      elapsed = BigInt(timeTo1 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
+      expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
 
-        elapsed = BigInt(timeTo1 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
-        console.log("elapsed:\t\t%d/%d", elapsed, duration);
+      [releasableAmount, releasableReward] = await vesting.getReleasableAmount(owner.address)
+      expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
+      expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
 
-        expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
-        console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-        expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
-        console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
+      await expect(vesting.release(owner))
+        .to.emit(vesting, "TokensReleased")
+        .withArgs(owner.address, expectReleasableAmount, expectReleasableReward);
+    });
+  });
 
-        [releasableAmount, releasableReward] = await vesting.getReleasableAmount(owner.address)
-        console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
-        console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
-        expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
-        expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
-
-        await expect(vesting.release(owner))
-          .to.emit(vesting, "TokensReleased")
-          .withArgs(owner.address, expectReleasableAmount, expectReleasableReward);
-      });
+  
+  describe("Operate", function () {
+    it("Calling setDurationUnitRewards should revert if caller is not the operator", async () => {
+      const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
+        deployOneYearLockFixture
+      );
+      
+    await expect(
+       vesting.connect(otherAccount).setDurationUnitRewards(0, 0, 0, 0),
+      ).to.be.revertedWith("!auth");
     });
 
-    describe("CreateVestingSchedule and Release to owner", function () {
-      it("Should release the funds to the owner", async function () {
-        const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
-          deployOneYearLockFixture
-        );
+    it("Calling setOperator should revert if caller is not the operator", async () => {
+      const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
+        deployOneYearLockFixture
+      );
+      
+    await expect(
+       vesting.connect(otherAccount).setOperator(otherAccount.address),
+      ).to.be.revertedWith("!auth");
+    });
 
-        const startTime = await time.latest() + 60;
+    it("Should operate the contract by the owner", async function () {
+      const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
+        deployOneYearLockFixture
+      );
 
-        // duration for deposit 
-        const duration = 4;
-        // durationUnit for deposit 
-        const durUnit = durationUnit.Months;
-        // deposit amount
-        const amount = ethers.parseEther("100");
-        // set unlocktime (days)
-        const releaseDays1 = 1 * 30;
-        const releaseDays2 = 3 * 30;
+      [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
+      expect(dayRewardPerGwei).to.equal(scheduleRewards["Days"]);
+      expect(weekRewardPerGwei).to.equal(scheduleRewards["Weeks"]);
+      expect(monthRewardPerGwei).to.equal(scheduleRewards["Months"]);
+      expect(quarterRewardPerGwei).to.equal(scheduleRewards["Quarters"]);
 
-        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
-        if (durUnit == durationUnit.Days) {
-        } else if (durUnit == durationUnit.Weeks) {
-          DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 7;
-        } else if (durUnit == durationUnit.Months) {
-          DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
-        } else if (durUnit == durationUnit.Quarters) {
-          DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
-        }
+      await vesting.setDurationUnitRewards(0, 0, 0, 0);
+      [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
+      expect(dayRewardPerGwei).to.equal(0);
+      expect(weekRewardPerGwei).to.equal(0);
+      expect(monthRewardPerGwei).to.equal(0);
+      expect(quarterRewardPerGwei).to.equal(0);
 
-        // Testing for depoit
-        // await token.approve(vesting, amount)
-        // await vesting.createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount)
+    });
+  });
 
-        userTokenBalanceBefore = await token.balanceOf(owner);
-        await token.approve(vesting, amount)
-        // deposit by 2 times
-        await vesting.createVestingSchedule(owner.address, startTime, duration, durUnit, amount / BigInt(2))
-        await vesting.createVestingSchedule(owner.address, startTime, duration, durUnit, amount / BigInt(2))
 
-        vesingScheduleList = await vesting.getVestingSchedule(owner.address);
-        expect(2, vesingScheduleList.length)
+  describe("CreateVestingSchedule and Release to staker", function () {
+    it("Should release the funds to the staker", async function () {
+      const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
+        deployOneYearLockFixture
+      );
 
-        for (let i = 0; i < vesingScheduleList.length; i++) {
-          vesingSchedule = vesingScheduleList[i]
-          console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d\n",
-            i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei);
-        }
+      const startTime = await time.latest() + 60;
 
-        rewardPerGwei = scheduleRewards[durationUnitName[durUnit]];
-        console.log("vestingTimeStart:\t%o", new Date(startTime * 1000));
-        console.log("duration:\t\t%d", duration);
-        console.log("durationUnit:\t\t%s", durationUnitName[durUnit]);
-        console.log("rewardPerGwei:\t\t%s Gwei\n", ethers.formatUnits(rewardPerGwei, "gwei"));
+      // duration for deposit 
+      const duration = 4;
+      // durationUnit for deposit 
+      const durUnit = durationUnit.Months;
+      // deposit amount
+      const amount = ethers.parseEther("100");
+      // set unlocktime (days)
+      const releaseDays1 = 1 * 30;
+      const releaseDays2 = 3 * 30;
 
-        lockedAmount = await vesting.getLockedAmount(owner.address)
-        console.log("lockedAmount:\t\t%d Ether", ethers.formatEther(lockedAmount));
-        expect(lockedAmount).to.equal(amount);
+      DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
+      if (durUnit == durationUnit.Days) {
+      } else if (durUnit == durationUnit.Weeks) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 7;
+      } else if (durUnit == durationUnit.Months) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
+      } else if (durUnit == durationUnit.Quarters) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
+      }
 
-        userTokenBalanceAfter = await token.balanceOf(owner);
-        console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
-        expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount);
+      // Testing for depoit
+      // await token.approve(vesting, amount)
+      // await vesting.createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount)
 
-        vestingTokenBalance = await token.balanceOf(vesting);
-        console.log("vestingTokenBalance:\t%d Ether\n", ethers.formatEther(vestingTokenBalance));
-        expect(vestingTokenBalance).to.equal(amount);
 
-        // Testing for 1st release
-        timeTo1 = startTime + releaseDays1 * ONE_DAY_IN_SECS;
-        await time.increaseTo(timeTo1);
-        console.log("1st release time:\t%o", new Date((timeTo1) * 1000));
+      userTokenBalanceBefore = await token.balanceOf(owner);
+      await token.approve(vesting, amount)
+      // deposit by 2 times
+      await vesting.createVestingSchedule(owner.address, startTime, duration, durUnit, amount / BigInt(2))
+      await vesting.createVestingSchedule(owner.address, startTime, duration, durUnit, amount / BigInt(2))
 
-        elapsed = BigInt(timeTo1 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
-        console.log("elapsed:\t\t%d/%d", elapsed, duration);
+      vesingScheduleList = await vesting.getVestingSchedule(owner.address);
+      expect(2, vesingScheduleList.length)
 
-        expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
-        console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-        expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
-        console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
+      for (let i = 0; i < vesingScheduleList.length; i++) {
+        vesingSchedule = vesingScheduleList[i]
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei);
+      }
 
-        [releasableAmount, releasableReward] = await vesting.getReleasableAmount(owner.address)
-        console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
-        console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
-        expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
-        expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
+      rewardPerGwei = scheduleRewards[durationUnitName[durUnit]];
+      console.log("vestingTimeStart:\t%o", new Date(startTime * 1000));
+      console.log("duration:\t\t%d", duration);
+      console.log("durationUnit:\t\t%s", durationUnitName[durUnit]);
+      console.log("rewardPerGwei:\t\t%s Gwei\n", ethers.formatUnits(rewardPerGwei, "gwei"));
 
-        await vesting.release(owner)
-        console.log("release for account:\t%s", owner.address);
+      lockedAmount = await vesting.getLockedAmount(owner.address)
+      console.log("lockedAmount:\t\t%d Ether", ethers.formatEther(lockedAmount));
+      expect(lockedAmount).to.equal(amount);
 
-        vestingTokenBalance = await token.balanceOf(vesting);
-        console.log("vestingTokenBalance:\t%d Ether", ethers.formatEther(vestingTokenBalance));
-        expect(vestingTokenBalance).to.equal(amount - expectReleasableAmount - expectReleasableReward);
+      userTokenBalanceAfter = await token.balanceOf(owner);
+      console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
+      expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount);
 
-        userTokenBalanceAfter = await token.balanceOf(owner.address);
-        console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
-        expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount + expectReleasableAmount + expectReleasableReward);
+      vestingTokenBalance = await token.balanceOf(vesting);
+      console.log("vestingTokenBalance:\t%d Ether\n", ethers.formatEther(vestingTokenBalance));
+      expect(vestingTokenBalance).to.equal(amount);
 
-        lockedAmount = await vesting.getLockedAmount(owner.address)
-        console.log("lockedAmount:\t\t%d Ether\n", ethers.formatEther(lockedAmount));
-        expect(lockedAmount).to.equal(amount - expectReleasableAmount);
+      // Testing for 1st release
+      timeTo1 = startTime + releaseDays1 * ONE_DAY_IN_SECS;
+      await time.increaseTo(timeTo1);
+      console.log("1st release time:\t%o", new Date((timeTo1) * 1000));
 
-        // Testing for 2nd release
-        timeTo2 = startTime + releaseDays2 * ONE_DAY_IN_SECS;
-        await time.increaseTo(timeTo2);
-        console.log("2nd release time:\t%o", new Date((timeTo2) * 1000));
+      elapsed = BigInt(timeTo1 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
+      console.log("elapsed:\t\t%d/%d", elapsed, duration);
 
-        elapsed = BigInt(timeTo2 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
-        console.log("elapsed:\t\t%d/%d", elapsed, duration);
+      expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
+      console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
-        latestReleasableAmount = expectReleasableAmount;
-        latestReleasableReward = expectReleasableReward;
+      [releasableAmount, releasableReward] = await vesting.getReleasableAmount(owner.address)
+      console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
+      console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
+      expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
+      expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
 
-        expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration) - latestReleasableAmount;
-        console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-        expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
-        console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
+      await vesting.release(owner)
+      console.log("release for account:\t%s", owner.address);
 
-        [releasableAmount, releasableReward] = await vesting.getReleasableAmount(owner.address)
-        console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
-        console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
-        expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
-        expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
+      vestingTokenBalance = await token.balanceOf(vesting);
+      console.log("vestingTokenBalance:\t%d Ether", ethers.formatEther(vestingTokenBalance));
+      expect(vestingTokenBalance).to.equal(amount - expectReleasableAmount - expectReleasableReward);
 
-        await vesting.release(owner)
-        console.log("release for account:\t%s", owner.address);
+      userTokenBalanceAfter = await token.balanceOf(owner.address);
+      console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
+      expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount + expectReleasableAmount + expectReleasableReward);
 
-        vestingTokenBalance = await token.balanceOf(vesting);
-        console.log("vestingTokenBalance:\t%d Ether", ethers.formatEther(vestingTokenBalance));
-        expect(vestingTokenBalance).to.equal(amount - expectReleasableAmount - latestReleasableAmount - releasableReward - latestReleasableReward);
+      lockedAmount = await vesting.getLockedAmount(owner.address)
+      console.log("lockedAmount:\t\t%d Ether\n", ethers.formatEther(lockedAmount));
+      expect(lockedAmount).to.equal(amount - expectReleasableAmount);
 
-        userTokenBalanceAfter = await token.balanceOf(owner.address);
-        console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
-        expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount + expectReleasableAmount + latestReleasableAmount + releasableReward + latestReleasableReward);
+      // Testing for 2nd release
+      timeTo2 = startTime + releaseDays2 * ONE_DAY_IN_SECS;
+      await time.increaseTo(timeTo2);
+      console.log("2nd release time:\t%o", new Date((timeTo2) * 1000));
 
-        lockedAmount = await vesting.getLockedAmount(owner.address)
-        console.log("lockedAmount:\t\t%d Ether\n", ethers.formatEther(lockedAmount));
-        expect(lockedAmount).to.equal(amount - expectReleasableAmount - latestReleasableAmount);
+      elapsed = BigInt(timeTo2 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
+      console.log("elapsed:\t\t%d/%d", elapsed, duration);
 
-        vesingScheduleList = await vesting.getVestingSchedule(owner.address);
-        expect(2, vesingScheduleList.length)
+      latestReleasableAmount = expectReleasableAmount;
+      latestReleasableReward = expectReleasableReward;
 
-        for (let i = 0; i < vesingScheduleList.length; i++) {
-          vesingSchedule = vesingScheduleList[i]
-          console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d, released=%d Ether, rewarded=%d Ether\n",
-            i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
-        }
+      expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration) - latestReleasableAmount;
+      console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
-      });
+      [releasableAmount, releasableReward] = await vesting.getReleasableAmount(owner.address)
+      console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
+      console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
+      expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
+      expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
+
+      await vesting.release(owner)
+      console.log("release for account:\t%s", owner.address);
+
+      vestingTokenBalance = await token.balanceOf(vesting);
+      console.log("vestingTokenBalance:\t%d Ether", ethers.formatEther(vestingTokenBalance));
+      expect(vestingTokenBalance).to.equal(amount - expectReleasableAmount - latestReleasableAmount - releasableReward - latestReleasableReward);
+
+      userTokenBalanceAfter = await token.balanceOf(owner.address);
+      console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
+      expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount + expectReleasableAmount + latestReleasableAmount + releasableReward + latestReleasableReward);
+
+      lockedAmount = await vesting.balanceOf(owner.address)
+      console.log("lockedAmount:\t\t%d Ether\n", ethers.formatEther(lockedAmount));
+      expect(lockedAmount).to.equal(amount - expectReleasableAmount - latestReleasableAmount);
+
+      vesingScheduleList = await vesting.getVestingSchedule(owner.address);
+      expect(2, vesingScheduleList.length)
+
+      for (let i = 0; i < vesingScheduleList.length; i++) {
+        vesingSchedule = vesingScheduleList[i]
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d, released=%d Ether, rewarded=%d Ether",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
+      }
+
     });
   });
 });
