@@ -1,13 +1,6 @@
-# Sample Hardhat Project
+# RewardVesingContract
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a script that deploys that contract.
+- The contract that allows to create vesting schedules for a beneficiary with daily/weekly/monthly/quarterly cliff unlocking.
+- Staker can receive corresponding rewards based on the duration and cliff period(daily/weekly/monthly/quarterly).
 
-Try running some of the following tasks:
-
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat run scripts/deploy.js
-```
+More details coming soon.
