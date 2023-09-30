@@ -19,6 +19,9 @@ contract RewardVestingContract {
 
     address public operator;
 
+    // total reward of tokens can be released;
+    uint256 public permanentTotal;
+
     enum DurationUnits {
         Days,
         Weeks,
@@ -149,6 +152,20 @@ contract RewardVestingContract {
     }
 
     /**
+     * @notice Deposit tokens permanently(CAN NOT DOING WITHDRAW FOREVER!)
+     * @param _amount The amount of tokens to be locked
+     * @dev Approve the contract to transfer the tokens before calling this function
+     */
+
+    function depositPermanently(uint _amount) external {
+        require(_amount > 0, "VestingContract: amount is 0");
+
+        // transfer the tokens to be locked to the contract
+        token.safeTransferFrom(msg.sender, address(this), _amount);
+        permanentTotal += _amount;
+    }
+
+    /**
      * @notice Creates a vesting schedule
      * @param _beneficiary The address of the beneficiary
      * @param _start The start UNIX timestamp of the vesting period
@@ -232,6 +249,13 @@ contract RewardVestingContract {
                     schedule.rewarded += rewardToSend;
                     // update the total rewarded amount
                     totalReward += rewardToSend;
+                    // update the total permanet amount
+                    require(
+                        permanentTotal >= rewardToSend,
+                        "VestingContract: tokens for reward is not enough"
+                    );
+
+                    permanentTotal -= rewardToSend;
                 }
                 // update the total released amount
                 totalRelease += amountToSend;
@@ -282,6 +306,28 @@ contract RewardVestingContract {
             rewardToSend += reward;
         }
         return (amountToSend, rewardToSend);
+    }
+
+    /**
+     * @notice Returns the amount of tokens for a beneficiary (amountTotal, releasedTotal, rewardedTotal)
+     * @param _beneficiary The address of the beneficiary
+     */
+    function getAmount(
+        address _beneficiary
+    ) external view returns (uint256, uint256, uint256) {
+        VestingSchedule[] memory schedules = vestingSchedules[_beneficiary];
+        if (schedules.length == 0) return (0, 0, 0);
+
+        uint256 amountTotal = 0;
+        uint256 releasedTotal = 0;
+        uint256 rewardedTotal = 0;
+        for (uint256 i = 0; i < schedules.length; i++) {
+            VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
+            amountTotal += schedule.amountTotal;
+            releasedTotal += schedule.released;
+            rewardedTotal += schedule.rewarded;
+        }
+        return (amountTotal, releasedTotal, rewardedTotal);
     }
 
     /**
@@ -343,9 +389,9 @@ contract RewardVestingContract {
         } else {
             uint256 passed = (block.timestamp - _schedule.start) /
                 sliceInSeconds;
-            uint256 reward = (_schedule.amountTotal * passed) /
+            uint256 amount = (_schedule.amountTotal * passed) /
                 _schedule.duration;
-            return (reward, (reward * _schedule.rewardPerGwei) / 1 gwei);
+            return (amount, (amount * _schedule.rewardPerGwei) / 1 gwei);
         }
     }
 
