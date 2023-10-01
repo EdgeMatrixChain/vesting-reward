@@ -2,8 +2,9 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
-// import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "hardhat/console.sol";
+import {UD60x18, ud} from "@prb/math/src/UD60x18.sol";
 
 /// @title RewardVestingContract
 /// @notice  The contract that allows to create vesting schedules for a beneficiary with daily/weekly/monthly/quarterly cliff unlocking.
@@ -11,6 +12,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /// This is a rewriting of [VestingContract.sol](https://github.com/andreitoma8/vesting-contract/blob/master/contracts/VestingContract.sol), modified for adding reward functions.
 contract RewardVestingContract {
     using SafeERC20 for IERC20;
+    using SafeMath for uint256;
 
     /**
      * @notice The token to be vested
@@ -24,9 +26,10 @@ contract RewardVestingContract {
 
     enum DurationUnits {
         Days,
-        Weeks,
-        Months,
-        Quarters
+        Days30,
+        Days90,
+        Days180,
+        Days360
     }
 
     struct VestingSchedule {
@@ -42,8 +45,8 @@ contract RewardVestingContract {
         uint256 amountTotal;
         // amount of tokens released
         uint256 released;
-        // reward per Gwei token
-        uint256 rewardPerGwei;
+        // yield rate
+        uint256 yieldRate;
         // amount of tokens rewarded
         uint256 rewarded;
     }
@@ -59,12 +62,17 @@ contract RewardVestingContract {
     mapping(DurationUnits => uint256) public durationUnitRewards;
 
     /**
+     * @notice Multiple of schedule durationUnits
+     */
+    mapping(DurationUnits => uint256) public durationUnitMultiple;
+
+    /**
      * @notice Emitted when a vesting schedule is created
      * @param beneficiary The address of the beneficiary
      * @param start The start UNIX timestamp of the vesting period
      * @param duration The duration of the vesting period in DurationUnits
-     * @param durationUnits The units of the duration(0 = days, 1 = weeks, 2 = months, 3 = quarters)
-     * @param rewardPerGwei Rreward per Gwei token
+     * @param durationUnits The units of the duration(0 = days, 1 = days30, 2 = days90, 3 = days180,  4 = days360)
+     * @param yieldRate Rreward per Ether token
      */
     event VestingScheduleCreated(
         address indexed beneficiary,
@@ -72,7 +80,7 @@ contract RewardVestingContract {
         uint256 duration,
         DurationUnits durationUnits,
         uint256 amountTotal,
-        uint256 rewardPerGwei
+        uint256 yieldRate
     );
 
     /**
@@ -89,24 +97,44 @@ contract RewardVestingContract {
 
     /**
      * @param _token The token to be vested
-     * @param dayRewardPerGwei The rward to be vested by DurationUnits.Days
-     * @param weekRewardPerGwei The token to be vested by DurationUnits.Weeks
-     * @param monthRewardPerGwei The token to be vested by DurationUnits.Months
-     * @param quarterRewardPerGwei The token to be vested by DurationUnits.Quarters
+     * @param daysYieldRate Yield rate by DurationUnits.Days,
+     * @param daysDurationMultiple Multiple for durations by DurationUnits.Days,
+     * @param days30YieldRate Yield rate by DurationUnits.Days30
+     * @param days30DurationMultiple Multiple for durations by DurationUnits.Days30
+     * @param days90YieldRate Yield rate by DurationUnits.Days90
+     * @param days90DurationMultiple Multiple for durations by DurationUnits.Days90
+     * @param days180YieldRate Yield rate by DurationUnits.Days180
+     * @param days180DurationMultiple Multiple for durations by DurationUnits.Days180
+     * @param days360YieldRate Yield rate by DurationUnits.Days360
+     * @param days360DurationMultiple Multiple for durations by DurationUnits.Days360
+     * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1ee14 = 0.01%.
      */
     constructor(
         IERC20 _token,
-        uint256 dayRewardPerGwei,
-        uint256 weekRewardPerGwei,
-        uint256 monthRewardPerGwei,
-        uint256 quarterRewardPerGwei
+        uint256 daysYieldRate,
+        uint256 daysDurationMultiple,
+        uint256 days30YieldRate,
+        uint256 days30DurationMultiple,
+        uint256 days90YieldRate,
+        uint256 days90DurationMultiple,
+        uint256 days180YieldRate,
+        uint256 days180DurationMultiple,
+        uint256 days360YieldRate,
+        uint256 days360DurationMultiple
     ) {
         token = _token;
         operator = msg.sender;
-        durationUnitRewards[DurationUnits.Days] = dayRewardPerGwei;
-        durationUnitRewards[DurationUnits.Weeks] = weekRewardPerGwei;
-        durationUnitRewards[DurationUnits.Months] = monthRewardPerGwei;
-        durationUnitRewards[DurationUnits.Quarters] = quarterRewardPerGwei;
+        durationUnitRewards[DurationUnits.Days] = daysYieldRate;
+        durationUnitRewards[DurationUnits.Days30] = days30YieldRate;
+        durationUnitRewards[DurationUnits.Days90] = days90YieldRate;
+        durationUnitRewards[DurationUnits.Days180] = days180YieldRate;
+        durationUnitRewards[DurationUnits.Days360] = days360YieldRate;
+
+        durationUnitMultiple[DurationUnits.Days] = daysDurationMultiple;
+        durationUnitMultiple[DurationUnits.Days30] = days30DurationMultiple;
+        durationUnitMultiple[DurationUnits.Days90] = days90DurationMultiple;
+        durationUnitMultiple[DurationUnits.Days180] = days180DurationMultiple;
+        durationUnitMultiple[DurationUnits.Days360] = days360DurationMultiple;
     }
 
     function setOperator(address _op) external {
@@ -116,23 +144,43 @@ contract RewardVestingContract {
 
     /**
      * @notice Set reward of schedule durationUnits
-     * @param dayRewardPerGwei The rward to be vested by DurationUnits.Days
-     * @param weekRewardPerGwei The token to be vested by DurationUnits.Weeks
-     * @param monthRewardPerGwei The token to be vested by DurationUnits.Months
-     * @param quarterRewardPerGwei The token to be vested by DurationUnits.Quarters
+     * @param daysYieldRate Yield rate by DurationUnits.Days,
+     * @param daysDurationMultiple Multiple for durations by DurationUnits.Days,
+     * @param days30YieldRate Yield rate by DurationUnits.Days30
+     * @param days30DurationMultiple Multiple for durations by DurationUnits.Days30
+     * @param days90YieldRate Yield rate by DurationUnits.Days90
+     * @param days90DurationMultiple Multiple for durations by DurationUnits.Days90
+     * @param days180YieldRate Yield rate by DurationUnits.Days180
+     * @param days180DurationMultiple Multiple for durations by DurationUnits.Days180
+     * @param days360YieldRate Yield rate by DurationUnits.Days360
+     * @param days360DurationMultiple Multiple for durations by DurationUnits.Days360
+     * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1ee14 = 0.01%.
      */
     function setDurationUnitRewards(
-        uint256 dayRewardPerGwei,
-        uint256 weekRewardPerGwei,
-        uint256 monthRewardPerGwei,
-        uint256 quarterRewardPerGwei
+        uint256 daysYieldRate,
+        uint256 daysDurationMultiple,
+        uint256 days30YieldRate,
+        uint256 days30DurationMultiple,
+        uint256 days90YieldRate,
+        uint256 days90DurationMultiple,
+        uint256 days180YieldRate,
+        uint256 days180DurationMultiple,
+        uint256 days360YieldRate,
+        uint256 days360DurationMultiple
     ) external {
         require(msg.sender == operator, "!auth");
 
-        durationUnitRewards[DurationUnits.Days] = dayRewardPerGwei;
-        durationUnitRewards[DurationUnits.Weeks] = weekRewardPerGwei;
-        durationUnitRewards[DurationUnits.Months] = monthRewardPerGwei;
-        durationUnitRewards[DurationUnits.Quarters] = quarterRewardPerGwei;
+        durationUnitRewards[DurationUnits.Days] = daysYieldRate;
+        durationUnitRewards[DurationUnits.Days30] = days30YieldRate;
+        durationUnitRewards[DurationUnits.Days90] = days90YieldRate;
+        durationUnitRewards[DurationUnits.Days180] = days180YieldRate;
+        durationUnitRewards[DurationUnits.Days360] = days360YieldRate;
+
+        durationUnitMultiple[DurationUnits.Days] = daysDurationMultiple;
+        durationUnitMultiple[DurationUnits.Days30] = days30DurationMultiple;
+        durationUnitMultiple[DurationUnits.Days90] = days90DurationMultiple;
+        durationUnitMultiple[DurationUnits.Days180] = days180DurationMultiple;
+        durationUnitMultiple[DurationUnits.Days360] = days360DurationMultiple;
     }
 
     /**
@@ -141,13 +189,30 @@ contract RewardVestingContract {
     function getDurationUnitRewards()
         external
         view
-        returns (uint256, uint256, uint256, uint256)
+        returns (
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        )
     {
         return (
             durationUnitRewards[DurationUnits.Days],
-            durationUnitRewards[DurationUnits.Days],
-            durationUnitRewards[DurationUnits.Days],
-            durationUnitRewards[DurationUnits.Days]
+            durationUnitMultiple[DurationUnits.Days],
+            durationUnitRewards[DurationUnits.Days30],
+            durationUnitMultiple[DurationUnits.Days30],
+            durationUnitRewards[DurationUnits.Days90],
+            durationUnitMultiple[DurationUnits.Days90],
+            durationUnitRewards[DurationUnits.Days180],
+            durationUnitMultiple[DurationUnits.Days180],
+            durationUnitRewards[DurationUnits.Days360],
+            durationUnitMultiple[DurationUnits.Days360]
         );
     }
 
@@ -170,7 +235,7 @@ contract RewardVestingContract {
      * @param _beneficiary The address of the beneficiary
      * @param _start The start UNIX timestamp of the vesting period
      * @param _duration The duration of the vesting period in DurationUnits
-     * @param _durationUnits The units of the duration(0 = days, 1 = weeks, 2 = months, 3 = quarters)
+     * @param _durationUnits The units of the duration(0 = days, 1 = months, 2 = quarters, 3 = years)
      * @param _amountTotal The total amount of tokens to be vested
      * @dev Approve the contract to transfer the tokens before calling this function
      */
@@ -196,7 +261,8 @@ contract RewardVestingContract {
         token.safeTransferFrom(msg.sender, address(this), _amountTotal);
 
         // create the vesting schedule and add it to the list of schedules for the beneficiary
-        uint256 rewardPerGwei = _reward(_durationUnits);
+        uint256 yieldRate = _reward(_durationUnits, _duration);
+
         vestingSchedules[_beneficiary].push(
             VestingSchedule({
                 beneficiary: _beneficiary,
@@ -205,7 +271,7 @@ contract RewardVestingContract {
                 durationUnits: _durationUnits,
                 amountTotal: _amountTotal,
                 released: 0,
-                rewardPerGwei: rewardPerGwei,
+                yieldRate: yieldRate,
                 rewarded: 0
             })
         );
@@ -216,7 +282,7 @@ contract RewardVestingContract {
             _duration,
             _durationUnits,
             _amountTotal,
-            rewardPerGwei
+            yieldRate
         );
     }
 
@@ -369,12 +435,14 @@ contract RewardVestingContract {
         uint256 sliceInSeconds;
         if (_schedule.durationUnits == DurationUnits.Days) {
             sliceInSeconds = 1 days;
-        } else if (_schedule.durationUnits == DurationUnits.Weeks) {
-            sliceInSeconds = 7 days;
-        } else if (_schedule.durationUnits == DurationUnits.Months) {
+        } else if (_schedule.durationUnits == DurationUnits.Days30) {
             sliceInSeconds = 30 days;
-        } else if (_schedule.durationUnits == DurationUnits.Quarters) {
+        } else if (_schedule.durationUnits == DurationUnits.Days90) {
             sliceInSeconds = 90 days;
+        } else if (_schedule.durationUnits == DurationUnits.Days180) {
+            sliceInSeconds = 180 days;
+        } else if (_schedule.durationUnits == DurationUnits.Days360) {
+            sliceInSeconds = 360 days;
         }
         if (block.timestamp < _schedule.start) {
             return (0, 0);
@@ -384,33 +452,54 @@ contract RewardVestingContract {
         ) {
             return (
                 _schedule.amountTotal,
-                (_schedule.amountTotal * _schedule.rewardPerGwei) / 1 gwei
+                (_schedule.amountTotal * _schedule.yieldRate).div(1e18)
             );
         } else {
-            uint256 passed = (block.timestamp - _schedule.start) /
-                sliceInSeconds;
-            uint256 amount = (_schedule.amountTotal * passed) /
-                _schedule.duration;
-            return (amount, (amount * _schedule.rewardPerGwei) / 1 gwei);
+            uint256 passed = (block.timestamp - _schedule.start).div(
+                sliceInSeconds
+            );
+            uint256 amount = (_schedule.amountTotal * passed).div(
+                _schedule.duration
+            );
+            return (amount, (amount * _schedule.yieldRate).div(1e18));
         }
     }
 
     /**
-     * @notice Returns the reward amount per gwei tokens
-     * @param _durationUnit The units of the duration(0 = days, 1 = weeks, 2 = months, 3 = quarters)
+     * @notice Returns the yield rate
+     * @param _durationUnit The units of the duration(0 = days, 1 = days30, 2 = days90, 3 = days180,  4 = days360)
      */
     function _reward(
-        DurationUnits _durationUnit
+        DurationUnits _durationUnit,
+        uint256 _duirations
     ) private view returns (uint256) {
         uint256 reward = 0;
         if (_durationUnit == DurationUnits.Days) {
-            reward = durationUnitRewards[DurationUnits.Days];
-        } else if (_durationUnit == DurationUnits.Weeks) {
-            reward = durationUnitRewards[DurationUnits.Weeks];
-        } else if (_durationUnit == DurationUnits.Months) {
-            reward = durationUnitRewards[DurationUnits.Months];
-        } else if (_durationUnit == DurationUnits.Quarters) {
-            reward = durationUnitRewards[DurationUnits.Quarters];
+            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days]);
+            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days]);
+            UD60x18 powValue =ud((_duirations - 1)* 1e18);
+            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
+        } else if (_durationUnit == DurationUnits.Days30) {
+            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days30]);
+            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days30]);
+            UD60x18 powValue =ud((_duirations - 1)* 1e18);
+            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
+            console.log("_reward days30----> rate=%d", reward);
+        } else if (_durationUnit == DurationUnits.Days90) {
+            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days90]);
+            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days90]);
+            UD60x18 powValue =ud((_duirations - 1)* 1e18);
+            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
+        } else if (_durationUnit == DurationUnits.Days180) {
+            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days180]);
+            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days180]);
+            UD60x18 powValue =ud((_duirations - 1)* 1e18);
+            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
+        } else if (_durationUnit == DurationUnits.Days360) {
+            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days360]);
+            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days360]);
+            UD60x18 powValue =ud((_duirations - 1)* 1e18);
+            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
         }
         return reward;
     }

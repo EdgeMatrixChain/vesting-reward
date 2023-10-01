@@ -8,10 +8,11 @@ const { expect } = require("chai");
 function Enum(...options) {
   return Object.fromEntries(options.map((key, i) => [key, i]));
 }
-const durationUnit = Enum('Days', 'Weeks', 'Months', 'Quarters');
-const durationUnitName = ['Days', 'Weeks', 'Months', 'Quarters'];
+const durationUnit = Enum('Days', 'Days30', 'Days90', 'Days180', 'Days360');
+const durationUnitName = ['Days', 'Days30', 'Days90', 'Days180', 'Days360'];
 const ONE_DAY_IN_SECS = 24 * 60 * 60;
-const ONE_GWEI = 1_000_000_000;
+const ONE_ETHER = BigInt(1e18);
+const DAYS30_DURATION_MULTIPLE = BigInt(1.03e18);
 
 
 describe("VestingContract", function () {
@@ -30,18 +31,54 @@ describe("VestingContract", function () {
     const token = await hre.ethers.deployContract("TestToken", [initSupply]);
     await token.transfer(otherAccount, hre.ethers.parseEther("100"));
 
-    const dayRewardPerGwei = hre.ethers.parseUnits("0.01", "gwei");
-    const weekRewardPerGwei = hre.ethers.parseUnits("0.01", "gwei");
-    const monthRewardPerGwei = hre.ethers.parseUnits("0.01", "gwei");
-    const quarterRewardPerGwei = hre.ethers.parseUnits("0.01", "gwei");
-    const vesting = await hre.ethers.deployContract("RewardVestingContract", [token, dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei]);
+
+    const daysRewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days30RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days90RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const vesting = await hre.ethers.deployContract("RewardVestingContract",
+      [token, daysRewardRate, ONE_ETHER, days30RewardRate, ONE_ETHER, days90RewardRate, ONE_ETHER, days180RewardRate, ONE_ETHER, days360RewardRate, ONE_ETHER]);
     await vesting.waitForDeployment();
 
     const scheduleRewards = {
-      "Days": dayRewardPerGwei,
-      "Weeks": weekRewardPerGwei,
-      "Months": monthRewardPerGwei,
-      "Quarters": quarterRewardPerGwei
+      "Days": daysRewardRate,
+      "Days30": days30RewardRate,
+      "Days90": days90RewardRate,
+      "Days180": days180RewardRate,
+      "Days360": days360RewardRate
+    };
+    return { token, vesting, owner, otherAccount, unlockTime, scheduleRewards };
+  }
+
+  async function deployContractFixture_testDays30() {
+
+    const unlockTime = (await time.latest()) + ONE_DAY_IN_SECS * 300;
+
+    // Contracts are deployed using the first signer/account by default
+    const [owner, otherAccount] = await ethers.getSigners();
+
+
+    const initSupply = hre.ethers.parseEther("1000000");
+    const token = await hre.ethers.deployContract("TestToken", [initSupply]);
+    await token.transfer(otherAccount, hre.ethers.parseEther("100"));
+
+
+    const daysRewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days30RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days90RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
+    const vesting = await hre.ethers.deployContract("RewardVestingContract",
+      [token, daysRewardRate, ONE_ETHER, days30RewardRate, DAYS30_DURATION_MULTIPLE, days90RewardRate, ONE_ETHER, days180RewardRate, ONE_ETHER, days360RewardRate, ONE_ETHER]);
+    await vesting.waitForDeployment();
+
+    const scheduleRewards = {
+      "Days": daysRewardRate,
+      "Days30": days30RewardRate,
+      "Days90": days90RewardRate,
+      "Days180": days180RewardRate,
+      "Days360": days360RewardRate
     };
     return { token, vesting, owner, otherAccount, unlockTime, scheduleRewards };
   }
@@ -58,25 +95,27 @@ describe("VestingContract", function () {
 
       const duration = 4;
       // durationUnit for deposit 
-      const durUnit = durationUnit.Weeks;
+      const durUnit = durationUnit.Days30;
       // deposit amount
       const amount = ethers.parseEther("100");
       // set unlocktime (days)
-      const releaseDays1 = 1 * 7;
+      const releaseDays1 = 1 * 30;
 
       DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
       if (durUnit == durationUnit.Days) {
-      } else if (durUnit == durationUnit.Weeks) {
-        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 7;
-      } else if (durUnit == durationUnit.Months) {
+      } else if (durUnit == durationUnit.Days30) {
         DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
-      } else if (durUnit == durationUnit.Quarters) {
+      } else if (durUnit == durationUnit.Days90) {
         DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
+      } else if (durUnit == durationUnit.Days180) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 180;
+      } else if (durUnit == durationUnit.Days360) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 360;
       }
-      const rewardPerGwei = scheduleRewards[durationUnitName[durUnit]];
+      const rewardRate = scheduleRewards[durationUnitName[durUnit]];
 
       // deposit tokens for releasing reward
-      depositAmount = BigInt(amount) * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      depositAmount = BigInt(amount) * BigInt(rewardRate) / BigInt(ONE_ETHER);
       await token.approve(vesting, depositAmount);
       await vesting.depositPermanently(depositAmount);
       contractTokenBalance = await token.balanceOf(vesting);
@@ -92,7 +131,7 @@ describe("VestingContract", function () {
           duration,
           durUnit,
           amount,
-          rewardPerGwei);
+          rewardRate);
 
 
       // Testing for 1st release
@@ -101,7 +140,7 @@ describe("VestingContract", function () {
 
       elapsed = BigInt(timeTo1 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
       expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
-      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
 
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
       expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
@@ -121,7 +160,7 @@ describe("VestingContract", function () {
       );
 
       await expect(
-        vesting.connect(otherAccount).setDurationUnitRewards(0, 0, 0, 0),
+        vesting.connect(otherAccount).setDurationUnitRewards(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
       ).to.be.revertedWith("!auth");
     });
 
@@ -140,27 +179,30 @@ describe("VestingContract", function () {
         deployContractFixture
       );
 
-      [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
-      expect(dayRewardPerGwei).to.equal(scheduleRewards["Days"]);
-      expect(weekRewardPerGwei).to.equal(scheduleRewards["Weeks"]);
-      expect(monthRewardPerGwei).to.equal(scheduleRewards["Months"]);
-      expect(quarterRewardPerGwei).to.equal(scheduleRewards["Quarters"]);
+      [daysRewardPerGwei, daysDurationMultiple, days30RewardPerGwei, days30DurationMultiple, days90RewardPerGwei, days90DurationMultiple, days180RewardPerGwei, days180DurationMultiple, days360RewardPerGwei, days360DurationMultiple,] = await vesting.getDurationUnitRewards();
+      expect(daysRewardPerGwei).to.equal(scheduleRewards["Days"]);
+      expect(days30RewardPerGwei).to.equal(scheduleRewards["Days30"]);
+      expect(days90RewardPerGwei).to.equal(scheduleRewards["Days90"]);
+      expect(days180RewardPerGwei).to.equal(scheduleRewards["Days180"]);
+      expect(days360RewardPerGwei).to.equal(scheduleRewards["Days360"]);
 
-      await vesting.setDurationUnitRewards(0, 0, 0, 0);
-      [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
-      expect(dayRewardPerGwei).to.equal(0);
-      expect(weekRewardPerGwei).to.equal(0);
-      expect(monthRewardPerGwei).to.equal(0);
-      expect(quarterRewardPerGwei).to.equal(0);
+      await vesting.setDurationUnitRewards(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      [daysRewardPerGwei, days30RewardPerGwei, days90RewardPerGwei, days180RewardPerGwei, days360RewardPerGwei] = await vesting.getDurationUnitRewards();
+      expect(daysRewardPerGwei).to.equal(0);
+      expect(days30RewardPerGwei).to.equal(0);
+      expect(days90RewardPerGwei).to.equal(0);
+      expect(days180RewardPerGwei).to.equal(0);
+      expect(days360RewardPerGwei).to.equal(0);
 
       await vesting.setOperator(otherAccount.address)
       await vesting.connect(otherAccount).setOperator(otherAccount.address)
-      await vesting.connect(otherAccount).setDurationUnitRewards(ONE_GWEI, ONE_GWEI, ONE_GWEI, ONE_GWEI);
-      [dayRewardPerGwei, weekRewardPerGwei, monthRewardPerGwei, quarterRewardPerGwei] = await vesting.getDurationUnitRewards();
-      expect(dayRewardPerGwei).to.equal(ONE_GWEI);
-      expect(weekRewardPerGwei).to.equal(ONE_GWEI);
-      expect(monthRewardPerGwei).to.equal(ONE_GWEI);
-      expect(quarterRewardPerGwei).to.equal(ONE_GWEI);
+      await vesting.connect(otherAccount).setDurationUnitRewards(ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER, ONE_ETHER);
+      [daysRewardPerGwei, days30RewardPerGwei, days90RewardPerGwei, days180RewardPerGwei, days360RewardPerGwei] = await vesting.getDurationUnitRewards();
+      expect(daysRewardPerGwei).to.equal(ONE_ETHER);
+      expect(days30RewardPerGwei).to.equal(ONE_ETHER);
+      expect(days90RewardPerGwei).to.equal(ONE_ETHER);
+      expect(days180RewardPerGwei).to.equal(ONE_ETHER);
+      expect(days360RewardPerGwei).to.equal(ONE_ETHER);
 
     });
   });
@@ -177,7 +219,7 @@ describe("VestingContract", function () {
       // duration for deposit 
       const duration = 4;
       // durationUnit for deposit 
-      const durUnit = durationUnit.Months;
+      const durUnit = durationUnit.Days30;
       // deposit amount
       const amount = ethers.parseEther("100");
       // set unlocktime (days)
@@ -187,12 +229,14 @@ describe("VestingContract", function () {
 
       DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
       if (durUnit == durationUnit.Days) {
-      } else if (durUnit == durationUnit.Weeks) {
-        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 7;
-      } else if (durUnit == durationUnit.Months) {
+      } else if (durUnit == durationUnit.Days30) {
         DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
-      } else if (durUnit == durationUnit.Quarters) {
+      } else if (durUnit == durationUnit.Days90) {
         DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
+      } else if (durUnit == durationUnit.Days180) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 180;
+      } else if (durUnit == durationUnit.Days360) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 360;
       }
 
       // Testing for depoit
@@ -200,8 +244,8 @@ describe("VestingContract", function () {
       // await vesting.createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount)
 
       // deposit tokens for releasing reward
-      rewardPerGwei = scheduleRewards[durationUnitName[durUnit]];
-      expectRewardTotal = BigInt(amount) * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      rewardRate = scheduleRewards[durationUnitName[durUnit]];
+      expectRewardTotal = BigInt(amount) * BigInt(rewardRate) / BigInt(ONE_ETHER);
       depositPermanentAmount = expectRewardTotal * BigInt(3) / BigInt(4);
       await token.approve(vesting, depositPermanentAmount);
       await vesting.depositPermanently(depositPermanentAmount);
@@ -228,14 +272,14 @@ describe("VestingContract", function () {
 
       for (let i = 0; i < vesingScheduleList.length; i++) {
         vesingSchedule = vesingScheduleList[i]
-        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d",
-          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei);
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, yieldRate=%d",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.yieldRate);
       }
 
       console.log("vestingTimeStart:\t%o", new Date(startTime * 1000));
       console.log("duration:\t\t%d", duration);
       console.log("durationUnit:\t\t%s", durationUnitName[durUnit]);
-      console.log("rewardPerGwei:\t\t%s Gwei\n", ethers.formatUnits(rewardPerGwei, "gwei"));
+      console.log("rewardRate:\t\t%s Ether\n", ethers.formatUnits(rewardRate, "ether"));
 
       lockedAmount = await vesting.getLockedAmount(otherAccount.address)
       console.log("lockedAmount:\t\t%d Ether", ethers.formatEther(lockedAmount));
@@ -260,7 +304,7 @@ describe("VestingContract", function () {
 
       expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
       console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
       console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
@@ -297,7 +341,7 @@ describe("VestingContract", function () {
 
       expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration) - latestReleasableAmount;
       console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
       console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
@@ -326,8 +370,8 @@ describe("VestingContract", function () {
 
       for (let i = 0; i < vesingScheduleList.length; i++) {
         vesingSchedule = vesingScheduleList[i]
-        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d, released=%d Ether, rewarded=%d Ether",
-          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, yieldRate=%d, released=%d Ether, rewarded=%d Ether",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.yieldRate, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
       }
 
       // Testing for 3rd release
@@ -341,7 +385,7 @@ describe("VestingContract", function () {
       [amountTotal, releasedTotal, rewardedTotal] = await vesting.getAmount(otherAccount.address)
       expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration) - releasedTotal;
       console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-      expectReleasableReward = expectReleasableAmount * BigInt(rewardPerGwei) / BigInt(ONE_GWEI);
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
       console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
@@ -403,10 +447,135 @@ describe("VestingContract", function () {
 
       for (let i = 0; i < vesingScheduleList.length; i++) {
         vesingSchedule = vesingScheduleList[i]
-        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, rewardPerGwei=%d, released=%d Ether, rewarded=%d Ether",
-          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.rewardPerGwei, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, yieldRate=%d, released=%d Ether, rewarded=%d Ether",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.yieldRate, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
       }
     });
 
+    it("Should release the funds to the staker who deposit by Days30", async function () {
+      const { token, vesting, owner, otherAccount, unlockTime, scheduleRewards } = await loadFixture(
+        deployContractFixture_testDays30
+      );
+
+      const startTime = await time.latest() + 60;
+
+      // duration for deposit 
+      const duration = 12;
+      // durationUnit for deposit 
+      const durUnit = durationUnit.Days30;
+      // deposit amount
+      const amount = ethers.parseEther("100");
+      // set unlocktime (days)
+      const releaseDays1 = 1 * 30;
+      const releaseDays2 = 3 * 30;
+      const releaseDays3 = 12 * 30;
+
+      DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 1;
+      if (durUnit == durationUnit.Days) {
+      } else if (durUnit == durationUnit.Days30) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 30;
+      } else if (durUnit == durationUnit.Days90) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 90;
+      } else if (durUnit == durationUnit.Days180) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 180;
+      } else if (durUnit == durationUnit.Days360) {
+        DURATION_UNIT_IN_SECS = ONE_DAY_IN_SECS * 360;
+      }
+      // deposit tokens for releasing reward
+      multiple = Number(DAYS30_DURATION_MULTIPLE) / Number(ONE_ETHER);
+      console.log("expectRewardMultiple:\t%f", multiple);
+      rewardRate = Number(scheduleRewards[durationUnitName[durUnit]]) * (multiple ** (duration - 1));
+      expectRewardTotal = BigInt(amount) * BigInt(rewardRate) / BigInt(ONE_ETHER);
+      console.log("expectRewardTotal:\t%d Ether", ethers.formatEther(expectRewardTotal));
+      depositPermanentAmount = expectRewardTotal;
+      await token.approve(vesting, depositPermanentAmount);
+      await vesting.depositPermanently(depositPermanentAmount);
+      console.log("depositPermanentAmount:\t%d Ether", ethers.formatEther(depositPermanentAmount));
+      contractTokenBalance = await token.balanceOf(vesting);
+      console.log("contractTokenBalance:\t%d Ether", ethers.formatEther(contractTokenBalance));
+      expect(contractTokenBalance).to.equal(depositPermanentAmount);
+
+      tokenAddress = await vesting.token()
+      console.log("tokenAddress:\t%s", tokenAddress);
+
+      permanentTotal = await vesting.permanentTotal()
+      console.log("permanentTotal:\t%d Ether", ethers.formatEther(permanentTotal));
+
+      userTokenBalanceBefore = await token.balanceOf(otherAccount);
+      console.log("userTokenBalanceBefore:\t%d Ether", ethers.formatEther(userTokenBalanceBefore))
+      await token.connect(otherAccount).approve(vesting, amount)
+      // createVestingSchedule 2 times
+      await vesting.connect(otherAccount).createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount / BigInt(2))
+      await vesting.connect(otherAccount).createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount / BigInt(2))
+
+      vesingScheduleList = await vesting.getVestingSchedule(otherAccount.address);
+      expect(2, vesingScheduleList.length)
+
+      for (let i = 0; i < vesingScheduleList.length; i++) {
+        vesingSchedule = vesingScheduleList[i]
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, yieldRate=%d",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.yieldRate);
+      }
+
+      console.log("vestingTimeStart:\t%o", new Date(startTime * 1000));
+      console.log("duration:\t\t%d", duration);
+      console.log("durationUnit:\t\t%s", durationUnitName[durUnit]);
+      console.log("rewardRate:\t\t%s Ether\n", ethers.formatUnits(BigInt(rewardRate), "ether"));
+
+      lockedAmount = await vesting.getLockedAmount(otherAccount.address)
+      console.log("lockedAmount:\t\t%d Ether", ethers.formatEther(lockedAmount));
+      expect(lockedAmount).to.equal(amount);
+
+      userTokenBalanceAfter = await token.balanceOf(otherAccount);
+      console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
+      expect(userTokenBalanceAfter).to.equal(userTokenBalanceBefore - amount);
+
+      contractTokenBalance = await token.balanceOf(vesting);
+      console.log("contractTokenBalance:\t%d Ether\n", ethers.formatEther(contractTokenBalance));
+      expect(contractTokenBalance).to.equal(amount + depositPermanentAmount);
+
+
+      // Testing for 1st release
+      timeTo1 = startTime + releaseDays3 * ONE_DAY_IN_SECS;
+      await time.increaseTo(timeTo1);
+      console.log("\n1st release time:\t%o", new Date((timeTo1) * 1000));
+
+      elapsed = BigInt(timeTo1 - startTime) / BigInt(DURATION_UNIT_IN_SECS);
+      console.log("elapsed:\t\t%d/%d", elapsed, duration);
+
+      expectReleasableAmount = (BigInt(amount) * elapsed) / BigInt(duration);
+      console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
+      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
+      console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
+
+      [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
+      console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
+      console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
+      expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
+      expect(BigInt(releasableReward - expectReleasableReward)).to.lt(1e9);
+
+      await vesting.release(otherAccount)
+      console.log("release for account:\t%s", otherAccount.address);
+
+      contractTokenBalance = await token.balanceOf(vesting);
+      console.log("contractTokenBalance:\t%d Ether", ethers.formatEther(contractTokenBalance));
+      expectTokenBalance = amount + depositPermanentAmount - expectReleasableAmount - expectReleasableReward;
+      console.log("expectContractTokenBalance:\t%d Ether", ethers.formatEther(expectTokenBalance));
+
+      userTokenBalanceAfter = await token.balanceOf(otherAccount.address);
+      console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
+      expectUserTokenBalance = userTokenBalanceBefore - amount + expectReleasableAmount + expectReleasableReward;
+      console.log("expectUserTokenBalance:\t%d Ether", ethers.formatEther(expectUserTokenBalance))
+
+      lockedAmount = await vesting.getLockedAmount(otherAccount.address)
+      console.log("lockedAmount:\t\t%d Ether\n", ethers.formatEther(lockedAmount));
+      expect(lockedAmount).to.equal(amount - expectReleasableAmount);
+
+      for (let i = 0; i < vesingScheduleList.length; i++) {
+        vesingSchedule = vesingScheduleList[i]
+        console.log("vesingSchedule[%d]: beneficiary=%s, start=%d, duration=%d, durationUnits=%d, amountTotal=%d Ether, yieldRate=%d, released=%d Ether, rewarded=%d Ether",
+          i, vesingSchedule.beneficiary, vesingSchedule.start, vesingSchedule.duration, vesingSchedule.durationUnits, ethers.formatEther(vesingSchedule.amountTotal), vesingSchedule.yieldRate, ethers.formatEther(vesingSchedule.released), ethers.formatEther(vesingSchedule.rewarded));
+      }
+    });
   });
 });
