@@ -3,12 +3,13 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "hardhat/console.sol";
 import {UD60x18, ud} from "@prb/math/src/UD60x18.sol";
 
+// import "hardhat/console.sol";
+
 /// @title RewardVestingContract
-/// @notice  The contract that allows to create vesting schedules for a beneficiary with daily/weekly/monthly/quarterly cliff unlocking.
-//  Staker can receive corresponding rewards based on the duration and cliff period(daily/weekly/monthly/quarterly).
+/// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days cliff unlocking.
+//  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days).
 /// This is a rewriting of [VestingContract.sol](https://github.com/andreitoma8/vesting-contract/blob/master/contracts/VestingContract.sol), modified for adding reward functions.
 contract RewardVestingContract {
     using SafeERC20 for IERC20;
@@ -154,7 +155,7 @@ contract RewardVestingContract {
      * @param days180DurationMultiple Multiple for durations by DurationUnits.Days180
      * @param days360YieldRate Yield rate by DurationUnits.Days360
      * @param days360DurationMultiple Multiple for durations by DurationUnits.Days360
-     * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1ee14 = 0.01%.
+     * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1e14 = 0.01%.
      */
     function setDurationUnitRewards(
         uint256 daysYieldRate,
@@ -403,17 +404,6 @@ contract RewardVestingContract {
     function releasableAmount(
         VestingSchedule memory _schedule
     ) public view returns (uint256, uint256) {
-        // console.log(
-        //     "vestedAmount----> beneficiary=%s, start=%d, duration=%d",
-        //     _schedule.beneficiary,
-        //     _schedule.start,
-        //     _schedule.duration
-        // );
-        // console.log(
-        //     "vestedAmount----> released=%d,amountTotal=%d",
-        //     _schedule.released,
-        //     _schedule.amountTotal
-        // );
         (uint256 amount, uint256 reward) = vestedAmount(_schedule);
         return (amount - _schedule.released, reward - _schedule.rewarded);
     }
@@ -474,33 +464,10 @@ contract RewardVestingContract {
         uint256 _duirations
     ) private view returns (uint256) {
         uint256 reward = 0;
-        if (_durationUnit == DurationUnits.Days) {
-            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days]);
-            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days]);
-            UD60x18 powValue =ud((_duirations - 1)* 1e18);
-            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
-        } else if (_durationUnit == DurationUnits.Days30) {
-            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days30]);
-            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days30]);
-            UD60x18 powValue =ud((_duirations - 1)* 1e18);
-            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
-            console.log("_reward days30----> rate=%d", reward);
-        } else if (_durationUnit == DurationUnits.Days90) {
-            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days90]);
-            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days90]);
-            UD60x18 powValue =ud((_duirations - 1)* 1e18);
-            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
-        } else if (_durationUnit == DurationUnits.Days180) {
-            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days180]);
-            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days180]);
-            UD60x18 powValue =ud((_duirations - 1)* 1e18);
-            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
-        } else if (_durationUnit == DurationUnits.Days360) {
-            UD60x18 baseRate = ud(durationUnitRewards[DurationUnits.Days360]);
-            UD60x18 multiple = ud(durationUnitMultiple[DurationUnits.Days360]);
-            UD60x18 powValue =ud((_duirations - 1)* 1e18);
-            reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
-        }
+        UD60x18 baseRate = ud(durationUnitRewards[_durationUnit]);
+        UD60x18 multiple = ud(durationUnitMultiple[_durationUnit]);
+        UD60x18 powValue = ud((_duirations - 1) * 1e18);
+        reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
         return reward;
     }
 
