@@ -228,7 +228,7 @@ contract RewardVestingContract {
 
         // transfer the tokens to be locked to the contract
         token.safeTransferFrom(msg.sender, address(this), _amount);
-        permanentTotal += _amount;
+        permanentTotal = permanentTotal.add(_amount);
     }
 
     /**
@@ -311,25 +311,25 @@ contract RewardVestingContract {
             );
             if (amountToSend > 0) {
                 // update the released amount
-                schedule.released += amountToSend;
+                schedule.released = schedule.released.add(amountToSend);
                 if (rewardToSend > 0) {
-                    schedule.rewarded += rewardToSend;
+                    schedule.rewarded = schedule.rewarded.add(rewardToSend);
                     // update the total rewarded amount
-                    totalReward += rewardToSend;
+                    totalReward = totalReward.add(rewardToSend);
                     // update the total permanet amount
                     require(
                         permanentTotal >= rewardToSend,
                         "VestingContract: tokens for reward is not enough"
                     );
 
-                    permanentTotal -= rewardToSend;
+                    permanentTotal = permanentTotal.sub(rewardToSend);
                 }
                 // update the total released amount
-                totalRelease += amountToSend;
+                totalRelease = totalRelease.add(amountToSend);
                 // transfer the tokens to the beneficiary
                 token.safeTransfer(
                     schedule.beneficiary,
-                    amountToSend + rewardToSend
+                    amountToSend.add(rewardToSend)
                 );
             }
         }
@@ -369,8 +369,8 @@ contract RewardVestingContract {
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
             (uint256 amount, uint256 reward) = releasableAmount(schedule);
-            amountToSend += amount;
-            rewardToSend += reward;
+            amountToSend = amountToSend.add(amount);
+            rewardToSend = rewardToSend.add(reward);
         }
         return (amountToSend, rewardToSend);
     }
@@ -390,9 +390,9 @@ contract RewardVestingContract {
         uint256 rewardedTotal = 0;
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
-            amountTotal += schedule.amountTotal;
-            releasedTotal += schedule.released;
-            rewardedTotal += schedule.rewarded;
+            amountTotal = amountTotal.add(schedule.amountTotal);
+            releasedTotal = releasedTotal.add(schedule.released);
+            rewardedTotal = rewardedTotal.add(schedule.rewarded);
         }
         return (amountTotal, releasedTotal, rewardedTotal);
     }
@@ -405,7 +405,7 @@ contract RewardVestingContract {
         VestingSchedule memory _schedule
     ) public view returns (uint256, uint256) {
         (uint256 amount, uint256 reward) = vestedAmount(_schedule);
-        return (amount - _schedule.released, reward - _schedule.rewarded);
+        return (amount.sub(_schedule.released), reward.sub(_schedule.rewarded));
     }
 
     /**
@@ -438,20 +438,20 @@ contract RewardVestingContract {
             return (0, 0);
         } else if (
             block.timestamp >=
-            _schedule.start + _schedule.duration * sliceInSeconds
+            _schedule.start.add(_schedule.duration.mul(sliceInSeconds))
         ) {
             return (
                 _schedule.amountTotal,
-                (_schedule.amountTotal * _schedule.yieldRate).div(1e18)
+                _schedule.amountTotal.mul(_schedule.yieldRate).div(1e18)
             );
         } else {
-            uint256 passed = (block.timestamp - _schedule.start).div(
+            uint256 passed = (block.timestamp.sub(_schedule.start)).div(
                 sliceInSeconds
             );
-            uint256 amount = (_schedule.amountTotal * passed).div(
+            uint256 amount = _schedule.amountTotal.mul(passed).div(
                 _schedule.duration
             );
-            return (amount, (amount * _schedule.yieldRate).div(1e18));
+            return (amount, amount.mul(_schedule.yieldRate).div(1e18));
         }
     }
 
@@ -466,7 +466,7 @@ contract RewardVestingContract {
         uint256 reward = 0;
         UD60x18 baseRate = ud(durationUnitRewards[_durationUnit]);
         UD60x18 multiple = ud(durationUnitMultiple[_durationUnit]);
-        UD60x18 powValue = ud((_duirations - 1) * 1e18);
+        UD60x18 powValue = ud((_duirations - 1).mul(1e18));
         reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
         return reward;
     }
@@ -480,7 +480,9 @@ contract RewardVestingContract {
         uint256 lockedAmount = 0;
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
-            lockedAmount += schedule.amountTotal - schedule.released;
+            lockedAmount = lockedAmount.add(
+                schedule.amountTotal - schedule.released
+            );
         }
         return lockedAmount;
     }
