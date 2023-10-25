@@ -154,7 +154,7 @@ contract RewardVesting {
      * @param days180DurationMultiple Multiple for durations by DurationUnits.Days180
      * @param days360BaseRate Base rate by DurationUnits.Days360
      * @param days360DurationMultiple Multiple for durations by DurationUnits.Days360
-     * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1e14 = 0.01%.
+     * @dev Assuming that 1e18 =1.0 =100% and 0.011e18 =0.01 =1%.
      */
     function setDurationUnitRewards(
         uint256 daysBaseRate,
