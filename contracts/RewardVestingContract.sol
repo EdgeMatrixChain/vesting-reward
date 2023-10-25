@@ -305,7 +305,7 @@ contract RewardVesting {
             VestingSchedule storage schedule = schedules[i];
 
             // calculate the releasable amount
-            (uint256 amountToSend, uint256 rewardToSend) = releasableAmount(
+            (uint256 amountToSend, uint256 rewardToSend) = _releasableAmount(
                 schedule
             );
             if (amountToSend > 0) {
@@ -367,7 +367,7 @@ contract RewardVesting {
         uint256 rewardToSend = 0;
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
-            (uint256 amount, uint256 reward) = releasableAmount(schedule);
+            (uint256 amount, uint256 reward) = _releasableAmount(schedule);
             amountToSend = amountToSend.add(amount);
             rewardToSend = rewardToSend.add(reward);
         }
@@ -400,10 +400,10 @@ contract RewardVesting {
      * @notice Returns the releasable amount of tokens for a vesting schedule
      * @param _schedule The vesting schedule
      */
-    function releasableAmount(
+    function _releasableAmount(
         VestingSchedule memory _schedule
-    ) public view returns (uint256, uint256) {
-        (uint256 amount, uint256 reward) = vestedAmount(_schedule);
+    ) internal view returns (uint256, uint256) {
+        (uint256 amount, uint256 reward) = _vestedAmount(_schedule);
         return (amount.sub(_schedule.released), reward.sub(_schedule.rewarded));
     }
 
@@ -411,9 +411,9 @@ contract RewardVesting {
      * @notice Returns the vested amount of tokens for a vesting schedule
      * @param _schedule The vesting schedule
      */
-    function vestedAmount(
+    function _vestedAmount(
         VestingSchedule memory _schedule
-    ) public view returns (uint256, uint256) {
+    ) internal view returns (uint256, uint256) {
         if (_schedule.duration == 0) {
             if (block.timestamp >= _schedule.start) {
                 return (_schedule.amountTotal, 0);
