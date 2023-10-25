@@ -3,14 +3,15 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-// import "https://github.com/abdk-consulting/abdk-libraries-solidity/blob/master/ABDKMath64x64.sol";
-import "./lib/ABDKMath64x64.sol";
+import "@prb/math/src/UD60x18.sol";
+
+// import "hardhat/console.sol";
 
 /// @title RewardVestingContract
 /// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days cliff unlocking.
 //  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days).
 /// This is a rewriting of [VestingContract.sol](https://github.com/andreitoma8/vesting-contract/blob/master/contracts/VestingContract.sol), modified for adding reward functions.
-contract RewardVestingContract {
+contract RewardVestingContractV1 {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -25,7 +26,7 @@ contract RewardVestingContract {
     uint256 public permanentTotal;
 
     enum DurationUnits {
-        Days,
+        Days, 
         Days30,
         Days90,
         Days180,
@@ -463,24 +464,10 @@ contract RewardVestingContract {
         uint256 _duirations
     ) private view returns (uint256) {
         uint256 reward = 0;
-        // UD60x18 baseRate = ud(durationUnitRewards[_durationUnit]);
-        // UD60x18 multiple = ud(durationUnitMultiple[_durationUnit]);
-        // UD60x18 powValue = ud((_duirations - 1).mul(1e18));
-        // reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
-
-        int128 baseRate = ABDKMath64x64.fromUInt(
-            durationUnitRewards[_durationUnit]
-        );
-        int128 multiple = ABDKMath64x64.divu(
-            durationUnitMultiple[_durationUnit],
-            1e18
-        );
-        uint256 powValue = _duirations - 1;
-
-        reward = ABDKMath64x64.toUInt(
-            ABDKMath64x64.mul(ABDKMath64x64.pow(multiple, powValue), baseRate)
-        );
-
+        UD60x18 baseRate = ud(durationUnitRewards[_durationUnit]);
+        UD60x18 multiple = ud(durationUnitMultiple[_durationUnit]);
+        UD60x18 powValue = ud((_duirations - 1).mul(1e18));
+        reward = baseRate.mul(multiple.pow(powValue)).intoUint256();
         return reward;
     }
 
