@@ -11,7 +11,7 @@ import "@prb/math/src/UD60x18.sol";
 /// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days cliff unlocking.
 //  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days).
 /// This is a rewriting of [VestingContract.sol](https://github.com/andreitoma8/vesting-contract/blob/master/contracts/VestingContract.sol), modified for adding reward functions.
-contract RewardVestingContractV1 {
+contract RewardVestingV1 {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
