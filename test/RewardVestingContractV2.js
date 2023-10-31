@@ -36,7 +36,7 @@ describe("VestingContract", function () {
     const days90RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
-    const vesting = await hre.ethers.deployContract("RewardVesting",
+    const vesting = await hre.ethers.deployContract("RewardVestingV2",
       [token, daysRewardRate, ONE_ETHER, days30RewardRate, ONE_ETHER, days90RewardRate, ONE_ETHER, days180RewardRate, ONE_ETHER, days360RewardRate, ONE_ETHER]);
     await vesting.waitForDeployment();
 
@@ -67,7 +67,7 @@ describe("VestingContract", function () {
     const days90RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
-    const vesting = await hre.ethers.deployContract("RewardVesting",
+    const vesting = await hre.ethers.deployContract("RewardVestingV2",
       [token, daysRewardRate, DAYS_DURATION_MULTIPLE, days30RewardRate, ONE_ETHER, days90RewardRate, ONE_ETHER, days180RewardRate, ONE_ETHER, days360RewardRate, ONE_ETHER]);
     await vesting.waitForDeployment();
 
@@ -98,7 +98,7 @@ describe("VestingContract", function () {
     const days90RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
-    const vesting = await hre.ethers.deployContract("RewardVesting",
+    const vesting = await hre.ethers.deployContract("RewardVestingV2",
       [token, daysRewardRate, ONE_ETHER, days30RewardRate, DAYS30_DURATION_MULTIPLE, days90RewardRate, ONE_ETHER, days180RewardRate, ONE_ETHER, days360RewardRate, ONE_ETHER]);
     await vesting.waitForDeployment();
 
@@ -129,7 +129,7 @@ describe("VestingContract", function () {
     const days90RewardRate = hre.ethers.parseUnits("0.013", "ether");
     const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
-    const vesting = await hre.ethers.deployContract("RewardVesting",
+    const vesting = await hre.ethers.deployContract("RewardVestingV2",
       [token, daysRewardRate, ONE_ETHER, days30RewardRate, ONE_ETHER, days90RewardRate, DAYS90_DURATION_MULTIPLE, days180RewardRate, ONE_ETHER, days360RewardRate, ONE_ETHER]);
     await vesting.waitForDeployment();
 

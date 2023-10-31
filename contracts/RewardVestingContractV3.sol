@@ -3,14 +3,13 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-// import "https://github.com/abdk-consulting/abdk-libraries-solidity/blob/master/ABDKMath64x64.sol";
-import "./lib/ABDKMath64x64.sol";
+
 
 /// @title RewardVestingContract
 /// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days cliff unlocking.
 //  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days).
 /// This is a rewriting of [VestingContract.sol](https://github.com/andreitoma8/vesting-contract/blob/master/contracts/VestingContract.sol), modified for adding reward functions.
-contract RewardVesting {
+contract RewardVestingV3 {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -19,18 +18,16 @@ contract RewardVesting {
      */
     IERC20 public immutable token;
 
-    address public operator;
-
     // total reward of tokens can be released;
     uint256 public permanentTotal;
 
     enum DurationUnits {
-        Days,
         Days30,
         Days90,
         Days180,
         Days360,
-        Days720
+        Days720,
+        Days1080
     }
 
     struct VestingSchedule {
@@ -46,7 +43,7 @@ contract RewardVesting {
         uint256 amountTotal;
         // amount of tokens released
         uint256 released;
-        // yield rate , yieldRate = durationUnitRewards[durationUnitRewards] * (multiple ** (duration - 1)
+        // yield rate
         uint256 yieldRate;
         // amount of tokens rewarded
         uint256 rewarded;
@@ -61,11 +58,6 @@ contract RewardVesting {
      * @notice Reward of schedule durationUnits
      */
     mapping(DurationUnits => uint256) public durationUnitRewards;
-
-    /**
-     * @notice Multiple of schedule durationUnits
-     */
-    mapping(DurationUnits => uint256) public durationUnitMultiple;
 
     /**
      * @notice Emitted when a vesting schedule is created
@@ -103,6 +95,7 @@ contract RewardVesting {
      * @param days180BaseRate Base rate by DurationUnits.Days180
      * @param days360BaseRate Base rate by DurationUnits.Days360
      * @param days720BaseRate Base rate by DurationUnits.Days720
+     * @param days1080BaseRate Base rate by DurationUnits.Days1080
      * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1ee14 = 0.01%.
      */
     constructor(
@@ -111,21 +104,17 @@ contract RewardVesting {
         uint256 days90BaseRate,
         uint256 days180BaseRate,
         uint256 days360BaseRate,
-        uint256 days720BaseRate   ) {
+        uint256 days720BaseRate,
+        uint256 days1080BaseRate
+    ) {
         token = _token;
-        operator = msg.sender;
         durationUnitRewards[DurationUnits.Days30] = days30BaseRate;
         durationUnitRewards[DurationUnits.Days90] = days90BaseRate;
         durationUnitRewards[DurationUnits.Days180] = days180BaseRate;
         durationUnitRewards[DurationUnits.Days360] = days360BaseRate;
         durationUnitRewards[DurationUnits.Days720] = days720BaseRate;
+        durationUnitRewards[DurationUnits.Days1080] = days1080BaseRate;
     }
-
-    function setOperator(address _op) external {
-        require(msg.sender == operator, "!auth");
-        operator = _op;
-    }
-
 
     /**
      * @notice Returns reward of schedule durationUnits
@@ -133,20 +122,15 @@ contract RewardVesting {
     function getDurationUnitRewards()
         external
         view
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        )
+        returns (uint256, uint256, uint256, uint256, uint256, uint256)
     {
         return (
             durationUnitRewards[DurationUnits.Days30],
             durationUnitRewards[DurationUnits.Days90],
             durationUnitRewards[DurationUnits.Days180],
             durationUnitRewards[DurationUnits.Days360],
-            durationUnitRewards[DurationUnits.Days720]
+            durationUnitRewards[DurationUnits.Days720],
+            durationUnitRewards[DurationUnits.Days1080]
         );
     }
 
@@ -168,7 +152,6 @@ contract RewardVesting {
      * @notice Creates a vesting schedule
      * @param _beneficiary The address of the beneficiary
      * @param _start The start UNIX timestamp of the vesting period
-     * @param _duration The duration of the vesting period in DurationUnits
      * @param _durationUnits The units of the duration(0 = days, 1 = months, 2 = quarters, 3 = years)
      * @param _amountTotal The total amount of tokens to be vested
      * @dev Approve the contract to transfer the tokens before calling this function
@@ -176,7 +159,6 @@ contract RewardVesting {
     function createVestingSchedule(
         address _beneficiary,
         uint256 _start,
-        uint256 _duration,
         DurationUnits _durationUnits,
         uint256 _amountTotal
     ) external {
@@ -186,22 +168,22 @@ contract RewardVesting {
             "VestingContract: beneficiary is the zero address"
         );
         require(_amountTotal > 0, "VestingContract: amount is 0");
-        require(
-            _start >= block.timestamp,
-            "VestingContract: start is before current time"
-        );
+        // require(
+        //     _start >= block.timestamp,
+        //     "VestingContract: start is before current time"
+        // );
 
         // transfer the tokens to be locked to the contract
         token.safeTransferFrom(msg.sender, address(this), _amountTotal);
 
         // create the vesting schedule and add it to the list of schedules for the beneficiary
-        uint256 yieldRate = _yieldRate(_durationUnits, _duration);
+        uint256 yieldRate = _yieldRate(_durationUnits);
 
         vestingSchedules[_beneficiary].push(
             VestingSchedule({
                 beneficiary: _beneficiary,
                 start: _start,
-                duration: _duration,
+                duration: 1,
                 durationUnits: _durationUnits,
                 amountTotal: _amountTotal,
                 released: 0,
@@ -213,7 +195,7 @@ contract RewardVesting {
         emit VestingScheduleCreated(
             _beneficiary,
             _start,
-            _duration,
+            1,
             _durationUnits,
             _amountTotal,
             yieldRate
@@ -357,9 +339,7 @@ contract RewardVesting {
             }
         }
         uint256 sliceInSeconds;
-        if (_schedule.durationUnits == DurationUnits.Days) {
-            sliceInSeconds = 1 days;
-        } else if (_schedule.durationUnits == DurationUnits.Days30) {
+        if (_schedule.durationUnits == DurationUnits.Days30) {
             sliceInSeconds = 30 days;
         } else if (_schedule.durationUnits == DurationUnits.Days90) {
             sliceInSeconds = 90 days;
@@ -367,6 +347,10 @@ contract RewardVesting {
             sliceInSeconds = 180 days;
         } else if (_schedule.durationUnits == DurationUnits.Days360) {
             sliceInSeconds = 360 days;
+        } else if (_schedule.durationUnits == DurationUnits.Days720) {
+            sliceInSeconds = 720 days;
+        } else if (_schedule.durationUnits == DurationUnits.Days1080) {
+            sliceInSeconds = 1080 days;
         }
         if (block.timestamp < _schedule.start) {
             return (0, 0);
@@ -390,29 +374,13 @@ contract RewardVesting {
     }
 
     /**
-     * @notice Returns the final yield rate = baseRate * (multiple ** (duration - 1));
-     * @param _durationUnit The units of the duration(0 = days, 1 = days30, 2 = days90, 3 = days180,  4 = days360)
+     * @notice Returns the final yield rate
+     * @param _durationUnit The units of the duration
      */
     function _yieldRate(
-        DurationUnits _durationUnit,
-        uint256 _duirations
+        DurationUnits _durationUnit
     ) internal view returns (uint256) {
-        uint256 finalRate = 0;
-
-        int128 baseRate = ABDKMath64x64.fromUInt(
-            durationUnitRewards[_durationUnit]
-        );
-        int128 multiple = ABDKMath64x64.divu(
-            durationUnitMultiple[_durationUnit],
-            1e18
-        );
-        uint256 powValue = _duirations - 1;
-
-        finalRate = ABDKMath64x64.toUInt(
-            ABDKMath64x64.mul(ABDKMath64x64.pow(multiple, powValue), baseRate)
-        );
-
-        return finalRate;
+        return durationUnitRewards[_durationUnit];
     }
 
     function _lockedAmount(
