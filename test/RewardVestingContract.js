@@ -62,7 +62,7 @@ describe("VestingContract", function () {
 
     // Assuming that 1e18 = 100% and 0.01e18 = 1% and 0.001e18 = 0.1%.
     const DAYS_DURATION_MULTIPLE = BigInt(1e18);
-    const daysRewardRate = hre.ethers.parseUnits("0.0067", "ether");
+    const daysRewardRate = hre.ethers.parseUnits("0.00001861", "ether");
     const days30RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days90RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days180RewardRate = hre.ethers.parseUnits("0.01", "ether");
@@ -145,7 +145,7 @@ describe("VestingContract", function () {
 
   describe("Test", function () {
     it("Contract constructor values", async function () {
-      console.log("rewardRate:\t\t%d\n", ethers.parseUnits("0.0067", "ether"));
+      console.log("rewardRate:\t\t%d\n", ethers.parseUnits("0.00001861", "ether"));
       console.log("multiple:\t\t%d\n", ethers.parseUnits("1.0", "ether"));
 
       console.log("rewardRate:\t\t%d\n", ethers.parseUnits("0.01", "ether"));

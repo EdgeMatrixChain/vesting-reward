@@ -29,7 +29,8 @@ contract RewardVesting {
         Days30,
         Days90,
         Days180,
-        Days360
+        Days360,
+        Days720
     }
 
     struct VestingSchedule {
@@ -97,44 +98,27 @@ contract RewardVesting {
 
     /**
      * @param _token The token to be vested
-     * @param daysBaseRate Base rate by DurationUnits.Days,
-     * @param daysDurationMultiple Multiple for durations by DurationUnits.Days,
      * @param days30BaseRate Base rate by DurationUnits.Days30
-     * @param days30DurationMultiple Multiple for durations by DurationUnits.Days30
      * @param days90BaseRate Base rate by DurationUnits.Days90
-     * @param days90DurationMultiple Multiple for durations by DurationUnits.Days90
      * @param days180BaseRate Base rate by DurationUnits.Days180
-     * @param days180DurationMultiple Multiple for durations by DurationUnits.Days180
      * @param days360BaseRate Base rate by DurationUnits.Days360
-     * @param days360DurationMultiple Multiple for durations by DurationUnits.Days360
+     * @param days720BaseRate Base rate by DurationUnits.Days720
      * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1ee14 = 0.01%.
      */
     constructor(
         IERC20 _token,
-        uint256 daysBaseRate,
-        uint256 daysDurationMultiple,
         uint256 days30BaseRate,
-        uint256 days30DurationMultiple,
         uint256 days90BaseRate,
-        uint256 days90DurationMultiple,
         uint256 days180BaseRate,
-        uint256 days180DurationMultiple,
         uint256 days360BaseRate,
-        uint256 days360DurationMultiple
-    ) {
+        uint256 days720BaseRate   ) {
         token = _token;
         operator = msg.sender;
-        durationUnitRewards[DurationUnits.Days] = daysBaseRate;
         durationUnitRewards[DurationUnits.Days30] = days30BaseRate;
         durationUnitRewards[DurationUnits.Days90] = days90BaseRate;
         durationUnitRewards[DurationUnits.Days180] = days180BaseRate;
         durationUnitRewards[DurationUnits.Days360] = days360BaseRate;
-
-        durationUnitMultiple[DurationUnits.Days] = daysDurationMultiple;
-        durationUnitMultiple[DurationUnits.Days30] = days30DurationMultiple;
-        durationUnitMultiple[DurationUnits.Days90] = days90DurationMultiple;
-        durationUnitMultiple[DurationUnits.Days180] = days180DurationMultiple;
-        durationUnitMultiple[DurationUnits.Days360] = days360DurationMultiple;
+        durationUnitRewards[DurationUnits.Days720] = days720BaseRate;
     }
 
     function setOperator(address _op) external {
@@ -142,46 +126,6 @@ contract RewardVesting {
         operator = _op;
     }
 
-    /**
-     * @notice Set reward of schedule durationUnits
-     * @param daysBaseRate Base rate by DurationUnits.Days,
-     * @param daysDurationMultiple Multiple for durations by DurationUnits.Days,
-     * @param days30BaseRate Base rate by DurationUnits.Days30
-     * @param days30DurationMultiple Multiple for durations by DurationUnits.Days30
-     * @param days90BaseRate Base rate by DurationUnits.Days90
-     * @param days90DurationMultiple Multiple for durations by DurationUnits.Days90
-     * @param days180BaseRate Base rate by DurationUnits.Days180
-     * @param days180DurationMultiple Multiple for durations by DurationUnits.Days180
-     * @param days360BaseRate Base rate by DurationUnits.Days360
-     * @param days360DurationMultiple Multiple for durations by DurationUnits.Days360
-     * @dev Assuming that 1e18 =1.0 =100% and 0.011e18 =0.01 =1%.
-     */
-    function setDurationUnitRewards(
-        uint256 daysBaseRate,
-        uint256 daysDurationMultiple,
-        uint256 days30BaseRate,
-        uint256 days30DurationMultiple,
-        uint256 days90BaseRate,
-        uint256 days90DurationMultiple,
-        uint256 days180BaseRate,
-        uint256 days180DurationMultiple,
-        uint256 days360BaseRate,
-        uint256 days360DurationMultiple
-    ) external {
-        require(msg.sender == operator, "!auth");
-
-        durationUnitRewards[DurationUnits.Days] = daysBaseRate;
-        durationUnitRewards[DurationUnits.Days30] = days30BaseRate;
-        durationUnitRewards[DurationUnits.Days90] = days90BaseRate;
-        durationUnitRewards[DurationUnits.Days180] = days180BaseRate;
-        durationUnitRewards[DurationUnits.Days360] = days360BaseRate;
-
-        durationUnitMultiple[DurationUnits.Days] = daysDurationMultiple;
-        durationUnitMultiple[DurationUnits.Days30] = days30DurationMultiple;
-        durationUnitMultiple[DurationUnits.Days90] = days90DurationMultiple;
-        durationUnitMultiple[DurationUnits.Days180] = days180DurationMultiple;
-        durationUnitMultiple[DurationUnits.Days360] = days360DurationMultiple;
-    }
 
     /**
      * @notice Returns reward of schedule durationUnits
@@ -194,25 +138,15 @@ contract RewardVesting {
             uint256,
             uint256,
             uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
             uint256
         )
     {
         return (
-            durationUnitRewards[DurationUnits.Days],
-            durationUnitMultiple[DurationUnits.Days],
             durationUnitRewards[DurationUnits.Days30],
-            durationUnitMultiple[DurationUnits.Days30],
             durationUnitRewards[DurationUnits.Days90],
-            durationUnitMultiple[DurationUnits.Days90],
             durationUnitRewards[DurationUnits.Days180],
-            durationUnitMultiple[DurationUnits.Days180],
             durationUnitRewards[DurationUnits.Days360],
-            durationUnitMultiple[DurationUnits.Days360]
+            durationUnitRewards[DurationUnits.Days720]
         );
     }
 
@@ -331,9 +265,10 @@ contract RewardVesting {
                     amountToSend.add(rewardToSend)
                 );
             }
+            if (amountToSend > 0 || rewardToSend > 0) {
+                emit TokensReleased(_beneficiary, totalRelease, totalReward);
+            }
         }
-
-        emit TokensReleased(_beneficiary, totalRelease, totalReward);
     }
 
     /**
