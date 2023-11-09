@@ -64,7 +64,7 @@ contract RewardVestingV3 {
      * @param beneficiary The address of the beneficiary
      * @param start The start UNIX timestamp of the vesting period
      * @param duration The duration of the vesting period in DurationUnits
-     * @param durationUnits The units of the duration(0 = days, 1 = days30, 2 = days90, 3 = days180,  4 = days360)
+     * @param durationUnits The units of the duration(0 = days30, 1 = days90, 2 = days180, 3 = days360, 4 = days720, 5 = days1080)
      * @param yieldRate Rreward per Ether token
      */
     event VestingScheduleCreated(
@@ -168,6 +168,7 @@ contract RewardVestingV3 {
             "VestingContract: beneficiary is the zero address"
         );
         require(_amountTotal > 0, "VestingContract: amount is 0");
+        // TODO uncomment for mainnet
         // require(
         //     _start >= block.timestamp,
         //     "VestingContract: start is before current time"
