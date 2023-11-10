@@ -44,7 +44,11 @@ describe("Consumption", function () {
         .to.emit(consumption, "ConsumptionBurned")
         .withArgs(otherAccount.address,
           hre.ethers.parseUnits("50", 18),
-          "123-456-789");
+          "123-456-789")
+        .to.emit(token, "Transfer")
+        .withArgs(otherAccount.address,
+          "0x0000000000000000000000000000000000000000",
+          hre.ethers.parseUnits("50", 18));
 
       userTokenBalanceAfter = await token.balanceOf(otherAccount);
       console.log("userTokenBalanceAfter:\t\t%d", hre.ethers.formatUnits(userTokenBalanceAfter, 18), userTokenBalanceAfter);
@@ -54,6 +58,33 @@ describe("Consumption", function () {
       totalSupply = await token.totalSupply();
       console.log("TestToken totalSupply:\t\t%d", hre.ethers.formatUnits(totalSupply, 18), totalSupply);
       expect(BigInt(totalSupply)).to.equal(initSupply - hre.ethers.parseUnits("50", 18));
+
+      console.log("consume:\t\t\t%d", 40, hre.ethers.parseUnits("40", 18));
+      await token.connect(otherAccount).approve(consumption, hre.ethers.parseUnits("40", 18));
+      await expect(consumption.connect(otherAccount).consume(hre.ethers.parseUnits("40", 18), "123-456-000"))
+        .to.emit(consumption, "ConsumptionBurned")
+        .withArgs(otherAccount.address,
+          hre.ethers.parseUnits("40", 18),
+          "123-456-000")
+        .to.emit(token, "Transfer")
+        .withArgs(otherAccount.address,
+          "0x0000000000000000000000000000000000000000",
+          hre.ethers.parseUnits("40", 18));
+
+      totalSupply = await token.totalSupply();
+      console.log("TestToken totalSupply:\t\t%d", hre.ethers.formatUnits(totalSupply, 18), totalSupply);
+      expect(BigInt(totalSupply)).to.equal(initSupply - hre.ethers.parseUnits("90", 18));
+
+      await token.connect(otherAccount).approve(consumption, hre.ethers.parseUnits("10", 18));
+
+      await expect(
+        consumption.connect(otherAccount).consume(hre.ethers.parseUnits("20", 18), "123-456-000")
+      ).to.be.revertedWith("checkTokenAllowance Error");
+
+      await token.connect(otherAccount).approve(consumption, hre.ethers.parseUnits("20", 18));
+      await expect(
+        consumption.connect(otherAccount).consume(hre.ethers.parseUnits("20", 18), "123-456-000")
+      ).to.be.revertedWith("ERC20: burn amount exceeds balance");
 
 
     });
