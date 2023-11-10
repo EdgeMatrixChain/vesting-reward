@@ -25,11 +25,10 @@ describe("VestingContract", function () {
 
 
     const initSupply = hre.ethers.parseEther("1000000000");
-    const token = await hre.ethers.deployContract("TestToken", [initSupply]);
-    console.log("TestToken initSupply:\t\t%d", hre.ethers.formatUnits(initSupply, 18), initSupply); 
-    await token.burn( hre.ethers.parseEther("100"));
+    const token = await hre.ethers.deployContract("TestToken", [1000000000]);
+    console.log("TestToken initSupply:\t\t%d", hre.ethers.formatUnits(initSupply, 18), initSupply);
     totalSupply = await token.totalSupply();
-    console.log("TestToken totalSupply:\t\t%d", hre.ethers.formatUnits(totalSupply, 18), totalSupply); 
+    console.log("TestToken totalSupply:\t\t%d", hre.ethers.formatUnits(totalSupply, 18), totalSupply);
     await token.transfer(otherAccount, hre.ethers.parseEther("100"));
 
     // Assuming that 1e18 = 100% and 0.01e18 = 1% and 0.001e18 = 0.1%.
@@ -39,7 +38,7 @@ describe("VestingContract", function () {
     const days360RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days720RewardRate = hre.ethers.parseUnits("0.01", "ether");
     const days1080RewardRate = hre.ethers.parseUnits("0.01", "ether");
-    const vesting = await hre.ethers.deployContract("RewardVestingV3",
+    const vesting = await hre.ethers.deployContract("RewardVestingV1",
       [token, days30RewardRate, days90RewardRate, days180RewardRate, days360RewardRate, days720RewardRate, days1080RewardRate]);
     await vesting.waitForDeployment();
 
