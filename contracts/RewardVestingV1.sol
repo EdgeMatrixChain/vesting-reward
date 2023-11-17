@@ -6,9 +6,8 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 
 /// @title RewardVestingContract
-/// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days cliff unlocking.
-//  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days).
-/// This is a rewriting of [VestingContract.sol](https://github.com/andreitoma8/vesting-contract/blob/master/contracts/VestingContract.sol), modified for adding reward functions.
+/// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days/720 days/1080 days cliff unlocking.
+//  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days/720 days/1080 days).
 contract RewardVestingV1 {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
