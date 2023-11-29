@@ -14,7 +14,7 @@ const ONE_DAY_IN_SECS = 24 * 60 * 60;
 const ONE_ETHER = BigInt(1e18);
 
 
-describe("VestingContract", function () {
+describe("RewardVestingContract", function () {
   // We define a fixture to reuse the same setup in every test.
   // We use loadFixture to run this setup once, snapshot that state,
   // and reset Hardhat Network to that snapshot in every test.
