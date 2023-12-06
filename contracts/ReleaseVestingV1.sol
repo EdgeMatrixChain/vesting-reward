@@ -279,20 +279,22 @@ contract ReleaseVestingV1 {
         }
     }
 
+
     function _lockedAmount(
         address _beneficiary
     ) internal view returns (uint256) {
         VestingSchedule[] memory schedules = vestingSchedules[_beneficiary];
         if (schedules.length == 0) return 0;
 
-        uint256 lockedAmount = 0;
+        uint256 totalLockedAmount = 0;
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
-            lockedAmount = lockedAmount.add(
-                schedule.amountTotal - schedule.released
-            );
+
+            uint256 amount = _vestedAmount(schedule);
+
+            totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(amount);
         }
-        return lockedAmount;
+        return totalLockedAmount;
     }
 
     /**
@@ -309,7 +311,18 @@ contract ReleaseVestingV1 {
      * @notice Provided to other governance contract calls
      * @dev See {IERC20-balanceOf}.
      */
-    function balanceOf(address account) external view returns (uint256) {
-        return _lockedAmount(account);
+    function balanceOf(address _beneficiary) external view returns (uint256) {
+        VestingSchedule[] memory schedules = vestingSchedules[_beneficiary];
+        if (schedules.length == 0) return 0;
+
+        uint256 totalLockedAmount = 0;
+        for (uint256 i = 0; i < schedules.length; i++) {
+            VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
+            totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(
+                schedule.released
+            );
+        }
+        return totalLockedAmount;
     }
+    
 }

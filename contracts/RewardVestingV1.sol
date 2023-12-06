@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-
 /// @title RewardVestingContract
 /// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days/720 days/1080 days cliff unlocking.
 //  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days/720 days/1080 days).
@@ -389,14 +388,15 @@ contract RewardVestingV1 {
         VestingSchedule[] memory schedules = vestingSchedules[_beneficiary];
         if (schedules.length == 0) return 0;
 
-        uint256 lockedAmount = 0;
+        uint256 totalLockedAmount = 0;
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
-            lockedAmount = lockedAmount.add(
-                schedule.amountTotal - schedule.released
-            );
+
+            (uint256 amount, ) = _vestedAmount(schedule);
+
+            totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(amount);
         }
-        return lockedAmount;
+        return totalLockedAmount;
     }
 
     /**
@@ -413,7 +413,17 @@ contract RewardVestingV1 {
      * @notice Provided to other governance contract calls
      * @dev See {IERC20-balanceOf}.
      */
-    function balanceOf(address account) external view returns (uint256) {
-        return _lockedAmount(account);
+    function balanceOf(address _beneficiary) external view returns (uint256) {
+        VestingSchedule[] memory schedules = vestingSchedules[_beneficiary];
+        if (schedules.length == 0) return 0;
+
+        uint256 totalLockedAmount = 0;
+        for (uint256 i = 0; i < schedules.length; i++) {
+            VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
+            totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(
+                schedule.released
+            );
+        }
+        return totalLockedAmount;
     }
 }
