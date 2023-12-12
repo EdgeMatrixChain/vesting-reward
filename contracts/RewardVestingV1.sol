@@ -167,10 +167,10 @@ contract RewardVestingV1 {
         );
         require(_amountTotal > 0, "VestingContract: amount is 0");
         // TODO uncomment for mainnet
-        // require(
-        //     _start >= block.timestamp,
-        //     "VestingContract: start is before current time"
-        // );
+        require(
+            _start >= block.timestamp,
+            "VestingContract: start is before current time"
+        );
 
         // transfer the tokens to be locked to the contract
         token.safeTransferFrom(msg.sender, address(this), _amountTotal);

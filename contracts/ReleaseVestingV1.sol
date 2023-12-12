@@ -16,6 +16,8 @@ contract ReleaseVestingV1 {
      */
     IERC20 public immutable token;
 
+    uint public immutable minStartDays;
+
     enum DurationUnits {
         Days30,
         Days90,
@@ -70,8 +72,9 @@ contract ReleaseVestingV1 {
     /**
      * @param _token The token to be vested
      */
-    constructor(IERC20 _token) {
+    constructor(IERC20 _token, uint _minStartDays) {
         token = _token;
+        minStartDays = _minStartDays;
     }
 
     /**
@@ -98,10 +101,10 @@ contract ReleaseVestingV1 {
         );
         require(_amountTotal > 0, "VestingContract: amount is 0");
         // TODO uncomment for mainnet
-        // require(
-        //     _start >= block.timestamp,
-        //     "VestingContract: start is before current time"
-        // );
+        require(
+            _start >= block.timestamp + minStartDays * 1 days,
+            string.concat("VestingContract: invalid start time")
+        );
 
         // transfer the tokens to be locked to the contract
         token.safeTransferFrom(msg.sender, address(this), _amountTotal);
