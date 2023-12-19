@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /// @title RewardVestingContract
 /// @notice  The RewardVesing Smart Contract that allows to create vesting schedules for a beneficiary with 1 day/30 days/90 days/180 days/360 days/720 days/1080 days cliff unlocking.
-//  Staker can receive corresponding rewards based on the duration and cliff period(1 day/30 days/90 days/180 days/360 days/720 days/1080 days).
+//  Staker can receive corresponding rewards based on the duration and cliff period(30 days/90 days/180 days/360 days/720 days/1080 days).
 contract RewardVestingV1 {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
@@ -33,8 +33,6 @@ contract RewardVestingV1 {
         address beneficiary;
         // start time of the vesting period
         uint256 start;
-        // duration of the vesting period in DurationUnits
-        uint256 duration;
         // units of the duration
         DurationUnits durationUnits;
         // total amount of tokens to be released at the end of the vesting;
@@ -61,14 +59,12 @@ contract RewardVestingV1 {
      * @notice Emitted when a vesting schedule is created
      * @param beneficiary The address of the beneficiary
      * @param start The start UNIX timestamp of the vesting period
-     * @param duration The duration of the vesting period in DurationUnits
      * @param durationUnits The units of the duration(0 = days30, 1 = days90, 2 = days180, 3 = days360, 4 = days720, 5 = days1080)
      * @param yieldRate Rreward per Ether token
      */
     event VestingScheduleCreated(
         address indexed beneficiary,
         uint256 start,
-        uint256 duration,
         DurationUnits durationUnits,
         uint256 amountTotal,
         uint256 yieldRate
@@ -97,7 +93,7 @@ contract RewardVestingV1 {
      * @dev Assuming that 1e18 = 100% and 1e16 = 1% and 1ee14 = 0.01%.
      */
     constructor(
-        IERC20 _token,
+        address _token,
         uint256 days30BaseRate,
         uint256 days90BaseRate,
         uint256 days180BaseRate,
@@ -105,7 +101,11 @@ contract RewardVestingV1 {
         uint256 days720BaseRate,
         uint256 days1080BaseRate
     ) {
-        token = _token;
+        require(
+            _token != address(0),
+            "VestingContract: _token is the zero address"
+        );
+        token = IERC20(_token);
         durationUnitRewards[DurationUnits.Days30] = days30BaseRate;
         durationUnitRewards[DurationUnits.Days90] = days90BaseRate;
         durationUnitRewards[DurationUnits.Days180] = days180BaseRate;
@@ -182,7 +182,7 @@ contract RewardVestingV1 {
             VestingSchedule({
                 beneficiary: _beneficiary,
                 start: _start,
-                duration: 1,
+                // duration: 1,
                 durationUnits: _durationUnits,
                 amountTotal: _amountTotal,
                 released: 0,
@@ -194,7 +194,6 @@ contract RewardVestingV1 {
         emit VestingScheduleCreated(
             _beneficiary,
             _start,
-            1,
             _durationUnits,
             _amountTotal,
             yieldRate
@@ -223,21 +222,23 @@ contract RewardVestingV1 {
             (uint256 amountToSend, uint256 rewardToSend) = _releasableAmount(
                 schedule
             );
-            if (amountToSend > 0) {
+
+            if (rewardToSend > 0) {
+                if (permanentTotal < rewardToSend) {
+                    rewardToSend = permanentTotal;
+                }
+
+                schedule.rewarded = schedule.rewarded.add(rewardToSend);
+                // update the total rewarded amount
+                totalReward = totalReward.add(rewardToSend);
+                // update the total permanet amount
+                permanentTotal = permanentTotal.sub(rewardToSend);
+            }
+
+            if (amountToSend > 0 || rewardToSend > 0) {
                 // update the released amount
                 schedule.released = schedule.released.add(amountToSend);
-                if (rewardToSend > 0) {
-                    schedule.rewarded = schedule.rewarded.add(rewardToSend);
-                    // update the total rewarded amount
-                    totalReward = totalReward.add(rewardToSend);
-                    // update the total permanet amount
-                    require(
-                        permanentTotal >= rewardToSend,
-                        "VestingContract: tokens for reward is not enough"
-                    );
 
-                    permanentTotal = permanentTotal.sub(rewardToSend);
-                }
                 // update the total released amount
                 totalRelease = totalRelease.add(amountToSend);
                 // transfer the tokens to the beneficiary
@@ -245,8 +246,6 @@ contract RewardVestingV1 {
                     schedule.beneficiary,
                     amountToSend.add(rewardToSend)
                 );
-            }
-            if (amountToSend > 0 || rewardToSend > 0) {
                 emit TokensReleased(_beneficiary, totalRelease, totalReward);
             }
         }
@@ -286,6 +285,9 @@ contract RewardVestingV1 {
             (uint256 amount, uint256 reward) = _releasableAmount(schedule);
             amountToSend = amountToSend.add(amount);
             rewardToSend = rewardToSend.add(reward);
+            if (permanentTotal < rewardToSend) {
+                rewardToSend = permanentTotal;
+            }
         }
         return (amountToSend, rewardToSend);
     }
@@ -330,13 +332,6 @@ contract RewardVestingV1 {
     function _vestedAmount(
         VestingSchedule memory _schedule
     ) internal view returns (uint256, uint256) {
-        if (_schedule.duration == 0) {
-            if (block.timestamp >= _schedule.start) {
-                return (_schedule.amountTotal, 0);
-            } else {
-                return (0, 0);
-            }
-        }
         uint256 sliceInSeconds;
         if (_schedule.durationUnits == DurationUnits.Days30) {
             sliceInSeconds = 30 days;
@@ -353,22 +348,13 @@ contract RewardVestingV1 {
         }
         if (block.timestamp < _schedule.start) {
             return (0, 0);
-        } else if (
-            block.timestamp >=
-            _schedule.start.add(_schedule.duration.mul(sliceInSeconds))
-        ) {
+        } else if (block.timestamp >= _schedule.start.add(sliceInSeconds)) {
             return (
                 _schedule.amountTotal,
                 _schedule.amountTotal.mul(_schedule.yieldRate).div(1e18)
             );
         } else {
-            uint256 passed = (block.timestamp.sub(_schedule.start)).div(
-                sliceInSeconds
-            );
-            uint256 amount = _schedule.amountTotal.mul(passed).div(
-                _schedule.duration
-            );
-            return (amount, amount.mul(_schedule.yieldRate).div(1e18));
+            return (0, 0);
         }
     }
 
@@ -394,7 +380,9 @@ contract RewardVestingV1 {
 
             (uint256 amount, ) = _vestedAmount(schedule);
 
-            totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(amount);
+            totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(
+                    amount
+                );
         }
         return totalLockedAmount;
     }
@@ -421,8 +409,8 @@ contract RewardVestingV1 {
         for (uint256 i = 0; i < schedules.length; i++) {
             VestingSchedule memory schedule = vestingSchedules[_beneficiary][i];
             totalLockedAmount = totalLockedAmount.add(schedule.amountTotal).sub(
-                schedule.released
-            );
+                    schedule.released
+                );
         }
         return totalLockedAmount;
     }

@@ -22,20 +22,14 @@ describe("Consumption", function () {
     console.log("TestToken totalSupply:\t\t%d", hre.ethers.formatUnits(totalSupply, 18), totalSupply);
     await token.transfer(otherAccount, hre.ethers.parseEther("100"));
 
+    const consumption = await hre.ethers.deployContract("ConsumptionV1", [token]);
 
-    const fundToken = await hre.ethers.deployContract("TestFundToken", [10000]);
-    const fundTokenDecimal = await fundToken.decimals();
-    console.log("decimal of the fund token:\t%d", fundTokenDecimal);
-    expect(fundTokenDecimal).to.equals(6);
-
-    const consumption = await hre.ethers.deployContract("ConsumptionV1", [token,fundToken]);
-
-    return { token,fundToken, consumption, otherAccount, initSupply };
+    return { token, consumption, otherAccount, initSupply };
   }
 
   describe("Events", function () {
     it("Should emit an event on consumption", async function () {
-      const { token,fundToken, consumption, otherAccount, initSupply } = await loadFixture(
+      const { token, consumption, otherAccount, initSupply } = await loadFixture(
         deployContractFixture
       );
       

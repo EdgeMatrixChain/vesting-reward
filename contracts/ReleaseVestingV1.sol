@@ -72,8 +72,12 @@ contract ReleaseVestingV1 {
     /**
      * @param _token The token to be vested
      */
-    constructor(IERC20 _token, uint _minStartDays) {
-        token = _token;
+    constructor(address _token, uint _minStartDays) {
+        require(
+            _token != address(0),
+            "VestingContract: _token is the zero address"
+        );
+        token = IERC20(_token);
         minStartDays = _minStartDays;
     }
 

@@ -110,7 +110,6 @@ describe("RewardVestingContract", function () {
         .to.emit(vesting, "VestingScheduleCreated")
         .withArgs(otherAccount.address,
           startTime,
-          duration,
           durUnit,
           amount,
           rewardRate);
@@ -208,7 +207,7 @@ describe("RewardVestingContract", function () {
 
       lockedAmount = await vesting.getLockedAmount(otherAccount.address)
       console.log("lockedAmount:\t\t%d Ether", ethers.formatEther(lockedAmount));
-      expect(lockedAmount).to.equal(amount);
+      expect(lockedAmount).to.equal(ethers.parseEther("100"));
 
       userTokenBalanceAfter = await token.balanceOf(otherAccount);
       console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
@@ -229,7 +228,7 @@ describe("RewardVestingContract", function () {
 
       expectReleasableAmount = BigInt(0);
       console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
+      expectReleasableReward = BigInt(0);
       console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
@@ -266,36 +265,27 @@ describe("RewardVestingContract", function () {
       expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
       console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
+      permanentTotal = await vesting.permanentTotal()
+      console.log("permanentTotal:\t%d Ether", ethers.formatEther(permanentTotal));
+
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
       console.log("releasableAmount:\t%d Ether", ethers.formatEther(releasableAmount));
       console.log("releasableReward:\t%d Ether", ethers.formatEther(releasableReward));
       expect(BigInt(releasableAmount)).to.equal(expectReleasableAmount);
-      expect(BigInt(releasableReward)).to.equal(expectReleasableReward);
+      expect(BigInt(releasableReward)).to.equal(permanentTotal);
 
       console.log("release for account:\t%s", otherAccount.address);
-      // expect revert, because (permanentTotal - releasableReward) < 0
-      await expect(
-        vesting.release(otherAccount),
-      ).to.be.revertedWith('VestingContract: tokens for reward is not enough');
+      await expect(vesting.release(otherAccount),)
+        .to.emit(vesting, "TokensReleased")
+        .withArgs(otherAccount.address, expectReleasableAmount, permanentTotal);
 
-      // deposit more tokens for releasing reward
-      depositPermanentAmount = expectRewardTotal / BigInt(2);
-      await token.approve(vesting, depositPermanentAmount);
-      await vesting.depositPermanently(depositPermanentAmount);
-      console.log("depositPermanentAmount:\t%d Ether", ethers.formatEther(depositPermanentAmount));
       contractTokenBalance = await token.balanceOf(vesting);
-      console.log("contractTokenBalance:\t%d Ether", ethers.formatEther(contractTokenBalance));
-      expect(contractTokenBalance).to.equal(amount + expectRewardTotal);
-
-      await vesting.release(otherAccount),
-
-        contractTokenBalance = await token.balanceOf(vesting);
       console.log("contractTokenBalance:\t%d Ether", ethers.formatEther(contractTokenBalance));
       expect(contractTokenBalance).to.equal(BigInt(0));
 
       userTokenBalanceAfter = await token.balanceOf(otherAccount.address);
       console.log("userTokenBalance:\t%d Ether", ethers.formatEther(userTokenBalanceAfter))
-      expect(userTokenBalanceAfter).to.equal(releasableAmount + releasableReward);
+      expect(userTokenBalanceAfter).to.equal(releasableAmount + permanentTotal);
 
       lockedAmount = await vesting.balanceOf(otherAccount.address)
       console.log("lockedAmount:\t\t%d Ether\n", ethers.formatEther(lockedAmount));
@@ -311,6 +301,10 @@ describe("RewardVestingContract", function () {
       }
 
       // Testing for 3rd release after 30 days
+      depositPermanentAmount = expectRewardTotal / BigInt(2);
+      await token.approve(vesting, depositPermanentAmount);
+      await vesting.depositPermanently(depositPermanentAmount);
+
       timeTo3 = startTime + releaseDays3 * ONE_DAY_IN_SECS;
       await time.increaseTo(timeTo3);
       console.log("\n3rd release time:\t%o", new Date((timeTo3) * 1000));
@@ -321,7 +315,7 @@ describe("RewardVestingContract", function () {
       [amountTotal, releasedTotal, rewardedTotal] = await vesting.getAmount(otherAccount.address)
       expectReleasableAmount = BigInt(0);
       console.log("expectReleasableAmount:\t%d Ether", ethers.formatEther(expectReleasableAmount));
-      expectReleasableReward = expectReleasableAmount * BigInt(rewardRate) / BigInt(ONE_ETHER);
+      expectReleasableReward = expectRewardTotal / BigInt(2);
       console.log("expectReleasableReward:\t%d Ether", ethers.formatEther(expectReleasableReward));
 
       [releasableAmount, releasableReward] = await vesting.getReleasableAmount(otherAccount.address)
@@ -333,8 +327,15 @@ describe("RewardVestingContract", function () {
 
       contractTokenBalance = await token.balanceOf(vesting);
       console.log("contractTokenBalance:\t%d Ether", ethers.formatEther(contractTokenBalance));
-      // permanentTotal = await vesting.permanentTotal()
-      // console.log("permanentTotal:\t%d Ether", ethers.formatEther(contractTokenBalance));
+
+      console.log("release for account:\t%s", otherAccount.address);
+      await expect(vesting.release(otherAccount),)
+        .to.emit(vesting, "TokensReleased")
+        .withArgs(otherAccount.address, expectReleasableAmount, expectReleasableReward);
+
+      permanentTotal = await vesting.permanentTotal()
+      console.log("permanentTotal:\t%d Ether", ethers.formatEther(contractTokenBalance));
+      expect(BigInt(permanentTotal)).to.equal(BigInt(0));
 
       // query amounts 
       lockedAmount = await vesting.balanceOf(otherAccount.address)
