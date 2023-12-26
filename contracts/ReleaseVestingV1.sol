@@ -208,7 +208,7 @@ contract ReleaseVestingV1 {
     }
 
     /**
-     * @notice Returns the amount of tokens for a beneficiary (amountTotal, releasedTotal, rewardedTotal)
+     * @notice Returns the amount of tokens for a beneficiary (amountTotal, releasedTotal)
      * @param _beneficiary The address of the beneficiary
      */
     function getAmount(
