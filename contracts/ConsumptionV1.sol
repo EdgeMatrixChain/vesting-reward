@@ -11,7 +11,6 @@ contract ConsumptionV1 {
      */
     ERC20Burnable public immutable consumptionToken;
 
-
     using SafeERC20 for IERC20;
 
     event ConsumptionBurned(address account, uint256 amount, string memo);

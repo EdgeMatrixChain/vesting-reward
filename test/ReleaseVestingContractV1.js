@@ -156,7 +156,7 @@ describe("ReleaseVestingContract", function () {
       await vesting.connect(otherAccount).createVestingSchedule(otherAccount.address, startTime, duration, durUnit, amount / BigInt(2))
 
       vesingScheduleList = await vesting.getVestingSchedule(otherAccount.address);
-      expect(2, vesingScheduleList.length)
+      expect(vesingScheduleList.length).to.equal(2);
 
       for (let i = 0; i < vesingScheduleList.length; i++) {
         vesingSchedule = vesingScheduleList[i]
